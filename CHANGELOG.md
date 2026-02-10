@@ -34,6 +34,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Optimization status guidance messages for infeasible, unbounded, target-miss, and solver-error outcomes.
 - Frontier/surface outputs now carry status guidance messages in addition to status codes.
 - Infeasibility-path optimization test coverage.
+- New `backtest` CLI command with:
+  - fixed/dynamic rebalancing mode support,
+  - calendar (`none|M|Q`) and every-N rebalance controls,
+  - optional benchmark-relative analytics output,
+  - optional backtest series export to CSV.
+- CLI test coverage for the `backtest` command path with benchmark and rebalancing options.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.

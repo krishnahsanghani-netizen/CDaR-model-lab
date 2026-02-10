@@ -27,6 +27,16 @@ enhanced-cdar optimize-cdar \
   --format json
 ```
 
+## Backtest with Rebalancing
+```bash
+enhanced-cdar backtest \
+  --prices-csv data/prices.csv \
+  --weights 0.25,0.25,0.25,0.25 \
+  --rebalance-calendar M \
+  --rebalance-every-n-periods 21 \
+  --format json
+```
+
 ## Build Frontier + Plot
 ```bash
 enhanced-cdar frontier \

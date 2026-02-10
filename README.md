@@ -42,6 +42,7 @@ Entry point: `enhanced-cdar`
 Commands:
 - `fetch-data`
 - `analyze-portfolio`
+- `backtest`
 - `optimize-cdar`
 - `frontier`
 - `surface`
@@ -51,6 +52,7 @@ Examples:
 ```bash
 enhanced-cdar fetch-data --tickers SPY,AGG,GLD,QQQ --start 2021-01-01 --end 2026-01-01 --output data/prices.csv
 enhanced-cdar analyze-portfolio --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --format json
+enhanced-cdar backtest --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --rebalance-calendar M
 enhanced-cdar optimize-cdar --prices-csv data/prices.csv --alpha 0.95 --no-short
 enhanced-cdar run-pipeline
 ```

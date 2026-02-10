@@ -268,6 +268,132 @@ def analyze_portfolio(
     _emit(metrics, out_format)
 
 
+@app.command("backtest")
+def backtest_portfolio(
+    prices_csv: str = typer.Option(..., help="Input prices CSV."),
+    weights: str = typer.Option(..., help="Comma-separated weights."),
+    benchmark_csv: str | None = typer.Option(
+        None,
+        help="Optional benchmark prices CSV (single-column).",
+    ),
+    alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    frequency: str = typer.Option("daily", help="daily|weekly|monthly"),
+    risk_free_rate: float = typer.Option(0.0, help="Annual risk-free rate."),
+    rebalance_calendar: str = typer.Option("none", help="none|M|Q"),
+    rebalance_every_n_periods: int | None = typer.Option(
+        None,
+        help="Optional periodic rebalance every N periods.",
+    ),
+    rebalance_mode: str = typer.Option("fixed", help="fixed|dynamic"),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
+    gross_limit: float | None = typer.Option(
+        None,
+        help="Optional gross exposure limit for dynamic mode.",
+    ),
+    output_returns_csv: str | None = typer.Option(
+        None,
+        help="Optional output path to save backtest return series.",
+    ),
+    out_format: str = typer.Option("text", "--format", help="text|json"),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+    verbose: bool = typer.Option(False, "--verbose"),
+    quiet: bool = typer.Option(False, "--quiet"),
+) -> None:
+    """Run portfolio backtest with optional rebalancing and benchmark analytics."""
+    _configure_logging(verbose, quiet)
+    cfg = _load_config(config)
+    cfg = _apply_overrides(
+        cfg,
+        {
+            "data": {"frequency": frequency},
+            "metrics": {
+                "default_alpha": alpha,
+                "risk_free_rate_annual": risk_free_rate,
+            },
+        },
+    )
+
+    prices = align_and_clean_prices(_load_prices_csv(prices_csv), cfg.data.missing_data_policy)
+    rets = compute_returns(prices, method=cfg.metrics.return_method)
+
+    w = _parse_weights(weights)
+    if len(w) != rets.shape[1]:
+        raise typer.BadParameter("weights length does not match number of assets in prices file.")
+
+    benchmark_returns: pd.Series | None = None
+    if benchmark_csv:
+        benchmark_prices = align_and_clean_prices(
+            _load_prices_csv(benchmark_csv),
+            cfg.data.missing_data_policy,
+        )
+        if benchmark_prices.shape[1] != 1:
+            raise typer.BadParameter("benchmark CSV must contain exactly one price column.")
+        benchmark_returns = compute_returns(
+            benchmark_prices,
+            method=cfg.metrics.return_method,
+        ).iloc[:, 0]
+
+    dynamic_optimizer = None
+    if rebalance_mode == "dynamic":
+        effective_gross = gross_limit
+        if effective_gross is None and not no_short:
+            effective_gross = cfg.optimization.gross_exposure_limit
+
+        def _dynamic_optimizer(history_returns: pd.DataFrame) -> np.ndarray:
+            result = optimize_portfolio_cdar(
+                returns=history_returns,
+                alpha=cfg.metrics.default_alpha,
+                no_short=no_short,
+                weight_bounds=None,
+                gross_exposure_limit=effective_gross,
+                solver=cfg.optimization.default_solver,
+                annualization_factor=cfg.annualization_factor,
+                risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
+            )
+            if not np.isfinite(result["weights"]).all():
+                raise ValueError(
+                    "Dynamic optimizer failed to produce valid weights. "
+                    "Try relaxing constraints."
+                )
+            return np.asarray(result["weights"], dtype=float)
+
+        dynamic_optimizer = _dynamic_optimizer
+
+    result = run_backtest(
+        returns=rets,
+        weights=w,
+        rebalance_calendar=rebalance_calendar,
+        rebalance_every_n_periods=rebalance_every_n_periods,
+        rebalance_mode=rebalance_mode,
+        benchmark_returns=benchmark_returns,
+        alpha=cfg.metrics.default_alpha,
+        annualization_factor=cfg.annualization_factor,
+        risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
+        no_short=no_short,
+        gross_exposure_limit=gross_limit,
+        dynamic_optimizer=dynamic_optimizer,
+    )
+
+    if output_returns_csv:
+        out = pd.DataFrame(
+            {
+                "portfolio_return": result.portfolio_returns,
+                "portfolio_value": result.portfolio_values,
+                "drawdown": result.drawdown,
+            }
+        )
+        Path(output_returns_csv).parent.mkdir(parents=True, exist_ok=True)
+        out.to_csv(output_returns_csv, index=True)
+
+    payload: dict[str, Any] = {"metrics": result.metrics}
+    if result.benchmark_metrics is not None:
+        payload["benchmark_metrics"] = result.benchmark_metrics
+    if output_returns_csv:
+        payload["returns_csv"] = output_returns_csv
+
+    _emit(payload, out_format)
+
+
 @app.command("optimize-cdar")
 def optimize_cdar(
     prices_csv: str = typer.Option(..., help="Input prices CSV."),
