@@ -50,3 +50,4 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Fixed Python 3.10 compatibility in data metadata timestamps by replacing `datetime.UTC` with `timezone.utc`.
 - Added `types-PyYAML` to development dependencies to satisfy mypy typed-import checks.
 - Fixed mypy typing issues in CDaR/loss helper return types, dynamic optimizer callback narrowing, and CLI lambda-grid tuple typing.
+- Fixed Python 3.10 mypy scalar inference in historical VaR/CVaR quantile handling.

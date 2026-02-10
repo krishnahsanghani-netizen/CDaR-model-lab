@@ -28,7 +28,7 @@ def compute_var(
     """Compute VaR as a positive loss magnitude."""
     losses = _losses(portfolio_returns)
     if method == "historical":
-        q = np.quantile(losses, alpha)
+        q = float(np.quantile(losses, alpha))
         return float(max(q, 0.0))
     if method == "parametric":
         if dist == "normal":
@@ -51,7 +51,7 @@ def compute_cvar(
     """Compute CVaR (Expected Shortfall) as a positive loss magnitude."""
     losses = _losses(portfolio_returns)
     if method == "historical":
-        q = np.quantile(losses, alpha)
+        q = float(np.quantile(losses, alpha))
         tail = losses[losses >= q]
         return float(max(tail.mean() if tail.size else 0.0, 0.0))
 
