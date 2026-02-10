@@ -186,3 +186,37 @@ def test_surface_command_with_preset(tmp_path: Path):
 
     assert result.exit_code == 0
     assert surface_out.exists()
+
+
+def test_scenario_command_with_preset(tmp_path: Path):
+    prices = pd.DataFrame(
+        {
+            "A": [100, 101, 99, 102, 103],
+            "B": [50, 50.5, 50.2, 51, 51.2],
+        },
+        index=pd.date_range("2024-01-01", periods=5, freq="D"),
+    )
+    prices_path = tmp_path / "prices.csv"
+    output_path = tmp_path / "scenario.csv"
+    prices.to_csv(prices_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "scenario",
+            "--prices-csv",
+            str(prices_path),
+            "--weights",
+            "0.5,0.5",
+            "--scenario-preset",
+            "basic",
+            "--output-csv",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "scenario_count" in result.stdout
+    assert output_path.exists()

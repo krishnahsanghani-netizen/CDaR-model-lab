@@ -53,6 +53,15 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - explicit `--no-short/--allow-short`,
   - writes `results/summary.json` artifact.
 - Additional CLI tests for advanced frontier and surface command paths.
+- Added scenario analysis API in `portfolio/scenario.py` for:
+  - additive global return shifts,
+  - per-asset shock maps,
+  - baseline vs scenario metric comparison.
+- Added `scenario` CLI command with:
+  - preset scenarios (`basic`),
+  - optional custom `--scenarios-json`,
+  - optional CSV export of scenario results.
+- Added scenario unit and CLI test coverage.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.

@@ -63,3 +63,13 @@ enhanced-cdar surface \
 ```bash
 enhanced-cdar run-pipeline
 ```
+
+## Scenario Analysis
+```bash
+enhanced-cdar scenario \
+  --prices-csv data/prices.csv \
+  --weights 0.25,0.25,0.25,0.25 \
+  --scenario-preset basic \
+  --output-csv runs/scenario_results.csv \
+  --format json
+```

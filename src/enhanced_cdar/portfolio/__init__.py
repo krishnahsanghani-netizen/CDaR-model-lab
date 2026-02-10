@@ -6,6 +6,11 @@ from enhanced_cdar.portfolio.optimization import (
     compute_mean_var_cdar_surface,
     optimize_portfolio_cdar,
 )
+from enhanced_cdar.portfolio.scenario import (
+    build_scenario_returns,
+    evaluate_portfolio_scenarios,
+    preset_scenarios,
+)
 from enhanced_cdar.portfolio.weights import default_bounds, load_asset_bounds_csv, validate_weights
 
 __all__ = [
@@ -14,6 +19,9 @@ __all__ = [
     "optimize_portfolio_cdar",
     "compute_cdar_efficient_frontier",
     "compute_mean_var_cdar_surface",
+    "build_scenario_returns",
+    "evaluate_portfolio_scenarios",
+    "preset_scenarios",
     "validate_weights",
     "default_bounds",
     "load_asset_bounds_csv",
