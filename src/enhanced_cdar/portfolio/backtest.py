@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from enhanced_cdar.metrics.cdar import compute_cdar
 from enhanced_cdar.metrics.drawdown import (
     compute_cumulative_value,
     compute_drawdown_curve,
-    compute_portfolio_returns,
 )
 from enhanced_cdar.metrics.risk_metrics import summarize_core_metrics
 from enhanced_cdar.portfolio.weights import validate_weights

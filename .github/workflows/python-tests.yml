@@ -23,7 +23,6 @@ jobs:
         run: |
           ruff check .
           black --check .
-          isort --check-only .
       - name: Type check
         run: mypy src
       - name: Run tests

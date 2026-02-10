@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 import cvxpy as cp
 import joblib
@@ -287,10 +287,10 @@ def compute_mean_var_cdar_surface(
 
     if parallel and len(lambda_grid) >= 40:
         rows = joblib.Parallel(n_jobs=n_jobs, backend="loky")(
-            joblib.delayed(_solve_one)(l) for l in lambda_grid
+            joblib.delayed(_solve_one)(lambda_tuple) for lambda_tuple in lambda_grid
         )
     else:
-        rows = [_solve_one(l) for l in lambda_grid]
+        rows = [_solve_one(lambda_tuple) for lambda_tuple in lambda_grid]
 
     return pd.DataFrame(rows)
 

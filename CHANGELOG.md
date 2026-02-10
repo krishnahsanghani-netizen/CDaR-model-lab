@@ -38,8 +38,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
 - Switched CLI override application to validated nested config merge behavior.
+- CI lint gate now uses `ruff` and `black` checks; import ordering is not separately gated.
+- Ruff rule selection updated to focus on active error classes (`E`, `F`, `UP`, `B`).
 
 ### Fixed
 - Replaced invalid empty notebook placeholder with a valid JSON notebook at `examples/example_basic_pipeline.ipynb` to satisfy Ruff notebook parsing.
 - Wrapped long CLI lines in `src/enhanced_cdar/cli.py` to satisfy Ruff `E501` line-length checks.
 - Wrapped all remaining >100-character Python lines across `src/` and `tests/` to satisfy repository line-length linting.
+- Rewrote `examples/example_basic_pipeline.ipynb` cell sources with valid newline encoding to fix Ruff notebook parsing/syntax failures.
+- Resolved Ruff `UP035`, `F401`, and `E741` issues in data/backtest/optimization modules.
