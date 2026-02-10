@@ -31,6 +31,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - CI-runnable Python example script at `examples/example_basic_pipeline.py`.
 - CLI benchmark-path test coverage for tracking error and information ratio output.
 - Package build dependency and CI build step (`python -m build`).
+- Optimization status guidance messages for infeasible, unbounded, target-miss, and solver-error outcomes.
+- Frontier/surface outputs now carry status guidance messages in addition to status codes.
+- Infeasibility-path optimization test coverage.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.

@@ -33,4 +33,25 @@ def test_frontier_outputs_status_column():
     )
     frontier = compute_cdar_efficient_frontier(returns, n_points=5, parallel=False)
     assert "status" in frontier.columns
+    assert "message" in frontier.columns
     assert len(frontier) == 5
+
+
+def test_optimize_portfolio_cdar_infeasible_has_message():
+    returns = pd.DataFrame(
+        {
+            "A": [0.01, 0.005, -0.01, 0.003, 0.004],
+            "B": [0.004, 0.003, -0.005, 0.002, 0.002],
+            "C": [0.02, -0.01, 0.015, -0.005, 0.01],
+        }
+    )
+    result = optimize_portfolio_cdar(
+        returns,
+        alpha=0.9,
+        target_return=10.0,
+        no_short=True,
+        weight_bounds=(0.0, 1.0),
+    )
+    if result["status"] != "optimal":
+        assert "message" in result
+        assert isinstance(result["message"], str)

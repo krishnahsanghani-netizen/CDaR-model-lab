@@ -102,12 +102,14 @@ def optimize_portfolio_cdar(
     status = _solve_with_fallback(problem, primary=solver or "ECOS", fallback="SCS")
 
     if w.value is None:
+        message = _status_message(status)
         return {
             "weights": np.full(n_assets, np.nan),
             "cdar": np.nan,
             "expected_return": np.nan,
             "other_metrics": {},
             "status": status,
+            "message": message,
         }
 
     weights = np.asarray(w.value, dtype=float)
@@ -124,6 +126,7 @@ def optimize_portfolio_cdar(
 
     if target_cdar is not None and metrics["cdar"] > target_cdar:
         status = "target_cdar_not_met"
+    message = _status_message(status)
 
     return {
         "weights": weights,
@@ -131,6 +134,7 @@ def optimize_portfolio_cdar(
         "expected_return": float(port.mean()),
         "other_metrics": metrics,
         "status": status,
+        "message": message,
     }
 
 
@@ -176,6 +180,7 @@ def compute_cdar_efficient_frontier(
             "volatility": float(result["other_metrics"].get("volatility", np.nan)),
             "max_drawdown": float(result["other_metrics"].get("max_drawdown", np.nan)),
             "status": result["status"],
+            "message": result.get("message"),
             "weights": result["weights"],
         }
         return row
@@ -257,6 +262,7 @@ def compute_mean_var_cdar_surface(
                 "cdar": np.nan,
                 "max_drawdown": np.nan,
                 "status": status,
+                "message": _status_message(status),
                 "weights": np.full(n_assets, np.nan),
             }
 
@@ -275,6 +281,7 @@ def compute_mean_var_cdar_surface(
             "cdar": float(metrics["cdar"]),
             "max_drawdown": float(metrics["max_drawdown"]),
             "status": status,
+            "message": _status_message(status),
             "weights": weights,
         }
 
@@ -338,3 +345,27 @@ def _solve_with_fallback(
     except Exception as exc:  # pragma: no cover - solver-specific runtime paths
         LOGGER.error("Fallback solver %s failed: %s", fallback, exc)
         return "solver_error"
+
+
+def _status_message(status: str) -> str:
+    """Convert solver/constraint status into actionable guidance."""
+    if status in {"optimal", "optimal_inaccurate"}:
+        return "Optimization completed successfully."
+    if status == "infeasible":
+        return (
+            "Problem is infeasible. Try lowering target return, widening bounds, "
+            "or increasing gross exposure limit."
+        )
+    if status == "unbounded":
+        return (
+            "Problem appears unbounded. Tighten constraints (bounds or gross exposure) "
+            "and verify input returns."
+        )
+    if status == "target_cdar_not_met":
+        return (
+            "Solution found, but target CDaR was not met. Relax target CDaR or "
+            "adjust return/weight constraints."
+        )
+    if status == "solver_error":
+        return "Solver failed. Try a different solver (ECOS/SCS) or inspect data quality."
+    return f"Optimization ended with status='{status}'."
