@@ -167,7 +167,11 @@ def compute_cdar_efficient_frontier(
         )
         row = {
             "target_return": float(target),
-            "achieved_return": float(result["expected_return"]) if np.isfinite(result["expected_return"]) else np.nan,
+            "achieved_return": (
+                float(result["expected_return"])
+                if np.isfinite(result["expected_return"])
+                else np.nan
+            ),
             "cdar": float(result["cdar"]) if np.isfinite(result["cdar"]) else np.nan,
             "volatility": float(result["other_metrics"].get("volatility", np.nan)),
             "max_drawdown": float(result["other_metrics"].get("max_drawdown", np.nan)),
@@ -177,7 +181,9 @@ def compute_cdar_efficient_frontier(
         return row
 
     if parallel and n_points >= 20:
-        rows = joblib.Parallel(n_jobs=n_jobs, backend="loky")(joblib.delayed(_solve)(t) for t in targets)
+        rows = joblib.Parallel(n_jobs=n_jobs, backend="loky")(
+            joblib.delayed(_solve)(t) for t in targets
+        )
     else:
         rows = [_solve(t) for t in targets]
 
@@ -234,7 +240,9 @@ def compute_mean_var_cdar_surface(
         cdar_expr = eta + (1.0 / ((1.0 - alpha) * t_count)) * cp.sum(xi)
         var_expr = cp.quad_form(w, cov)
         ret_expr = mu @ w
-        objective = cp.Minimize(lambda_cdar * cdar_expr + lambda_var * var_expr - lambda_ret * ret_expr)
+        objective = cp.Minimize(
+            lambda_cdar * cdar_expr + lambda_var * var_expr - lambda_ret * ret_expr
+        )
 
         problem = cp.Problem(objective, constraints)
         status = _solve_with_fallback(problem, primary="ECOS", fallback="SCS")
@@ -271,7 +279,9 @@ def compute_mean_var_cdar_surface(
         }
 
     if parallel and len(lambda_grid) >= 40:
-        rows = joblib.Parallel(n_jobs=n_jobs, backend="loky")(joblib.delayed(_solve_one)(l) for l in lambda_grid)
+        rows = joblib.Parallel(n_jobs=n_jobs, backend="loky")(
+            joblib.delayed(_solve_one)(l) for l in lambda_grid
+        )
     else:
         rows = [_solve_one(l) for l in lambda_grid]
 
@@ -279,7 +289,10 @@ def compute_mean_var_cdar_surface(
 
 
 
-def _adaptive_return_range(returns: pd.DataFrame, no_short: bool) -> tuple[float, float]:
+def _adaptive_return_range(
+    returns: pd.DataFrame,
+    no_short: bool,
+) -> tuple[float, float]:
     """Estimate frontier return range from equal-weight and corner portfolios."""
     n_assets = returns.shape[1]
     means = returns.mean().to_numpy(dtype=float)
@@ -296,7 +309,11 @@ def _adaptive_return_range(returns: pd.DataFrame, no_short: bool) -> tuple[float
 
 
 
-def _solve_with_fallback(problem: cp.Problem, primary: str, fallback: str) -> str:
+def _solve_with_fallback(
+    problem: cp.Problem,
+    primary: str,
+    fallback: str,
+) -> str:
     """Solve optimization with primary solver and fallback solver."""
     try:
         problem.solve(solver=primary)
@@ -304,7 +321,12 @@ def _solve_with_fallback(problem: cp.Problem, primary: str, fallback: str) -> st
         if status in {"optimal", "optimal_inaccurate"}:
             LOGGER.info("Optimization solved with solver=%s status=%s", primary, status)
             return status
-        LOGGER.warning("Primary solver %s returned status=%s. Trying fallback %s.", primary, status, fallback)
+        LOGGER.warning(
+            "Primary solver %s returned status=%s. Trying fallback %s.",
+            primary,
+            status,
+            fallback,
+        )
     except Exception as exc:  # pragma: no cover - solver-specific runtime paths
         LOGGER.warning("Primary solver %s failed: %s. Trying fallback %s.", primary, exc, fallback)
 

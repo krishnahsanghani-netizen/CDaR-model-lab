@@ -24,10 +24,15 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Initial fixture and integration dataset under `tests/data/` plus integration-style optimization test.
 - Hypothesis-based metric property tests for CDaR and max drawdown non-negativity.
 - Expanded README with mini-docs style quickstart and CLI usage.
+- Nested config merge helper `merge_config` for reliable override precedence.
+- `analyze-portfolio` enhancements for optional benchmark-relative metrics, rolling CDaR, and optional parametric metric outputs.
+- `optimize-cdar` enhancements for optional per-asset bounds CSV, gross limit override, and solver override.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
+- Switched CLI override application to validated nested config merge behavior.
 
 ### Fixed
 - Replaced invalid empty notebook placeholder with a valid JSON notebook at `examples/example_basic_pipeline.ipynb` to satisfy Ruff notebook parsing.
 - Wrapped long CLI lines in `src/enhanced_cdar/cli.py` to satisfy Ruff `E501` line-length checks.
+- Wrapped all remaining >100-character Python lines across `src/` and `tests/` to satisfy repository line-length linting.

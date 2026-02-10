@@ -30,8 +30,12 @@ def test_analyze_portfolio_command(tmp_path: Path):
             "0.6,0.4",
             "--format",
             "json",
+            "--rolling-cdar",
+            "--rolling-window",
+            "2",
         ],
     )
 
     assert result.exit_code == 0
     assert "cdar" in result.stdout
+    assert "rolling_cdar_last" in result.stdout

@@ -31,8 +31,16 @@ def plot_cdar_efficient_frontier(
     if backend == "matplotlib":
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.plot(valid["cdar"], valid["achieved_return"], marker="o")
-        ax.scatter(valid.loc[min_cdar_idx, "cdar"], valid.loc[min_cdar_idx, "achieved_return"], label="Min CDaR")
-        ax.scatter(valid.loc[max_return_idx, "cdar"], valid.loc[max_return_idx, "achieved_return"], label="Max Return")
+        ax.scatter(
+            valid.loc[min_cdar_idx, "cdar"],
+            valid.loc[min_cdar_idx, "achieved_return"],
+            label="Min CDaR",
+        )
+        ax.scatter(
+            valid.loc[max_return_idx, "cdar"],
+            valid.loc[max_return_idx, "achieved_return"],
+            label="Max Return",
+        )
         ax.set_xlabel("CDaR")
         ax.set_ylabel("Expected Return")
         ax.set_title(plot_title)

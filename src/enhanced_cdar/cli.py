@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import typer
 
-from enhanced_cdar.config import AppConfig, build_config
+from enhanced_cdar.config import AppConfig, build_config, merge_config
 from enhanced_cdar.data.loaders import load_from_yfinance
 from enhanced_cdar.data.preprocess import align_and_clean_prices
 from enhanced_cdar.metrics.drawdown import (
@@ -21,12 +21,20 @@ from enhanced_cdar.metrics.drawdown import (
     compute_portfolio_returns,
     compute_returns,
 )
-from enhanced_cdar.metrics.risk_metrics import summarize_core_metrics
+from enhanced_cdar.metrics.cdar import compute_rolling_cdar
+from enhanced_cdar.metrics.risk_metrics import (
+    compute_cdar_parametric,
+    compute_cvar,
+    compute_var,
+    summarize_core_metrics,
+)
+from enhanced_cdar.portfolio.backtest import run_backtest
 from enhanced_cdar.portfolio.optimization import (
     compute_cdar_efficient_frontier,
     compute_mean_var_cdar_surface,
     optimize_portfolio_cdar,
 )
+from enhanced_cdar.portfolio.weights import load_asset_bounds_csv
 from enhanced_cdar.viz.frontier import plot_cdar_efficient_frontier
 from enhanced_cdar.viz.surfaces import plot_mean_variance_cdar_surface
 from enhanced_cdar.viz.underwater import plot_underwater
@@ -52,9 +60,7 @@ def _load_config(config_path: str | None) -> AppConfig:
 
 
 def _apply_overrides(config: AppConfig, overrides: dict[str, Any]) -> AppConfig:
-    if not overrides:
-        return config
-    return config.model_copy(update=overrides)
+    return merge_config(config, overrides)
 
 
 
@@ -141,6 +147,30 @@ def analyze_portfolio(
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
     frequency: str = typer.Option("daily", help="daily|weekly|monthly"),
     risk_free_rate: float = typer.Option(0.0, help="Annual risk-free rate."),
+    benchmark_csv: str | None = typer.Option(
+        None,
+        help="Optional benchmark prices CSV (single-column price series).",
+    ),
+    rolling_cdar: bool = typer.Option(
+        False,
+        help="If set, compute rolling CDaR using --rolling-window.",
+    ),
+    rolling_window: int = typer.Option(
+        63,
+        help="Rolling CDaR window (periods); used when --rolling-cdar is enabled.",
+    ),
+    metric_mode: str = typer.Option(
+        "historical",
+        help="historical|parametric metric estimation mode.",
+    ),
+    parametric_dist: str = typer.Option(
+        "normal",
+        help="normal|student_t distribution for parametric mode.",
+    ),
+    student_t_df: float | None = typer.Option(
+        None,
+        help="Optional fixed Student-t degrees of freedom.",
+    ),
     out_format: str = typer.Option("text", "--format", help="text|json"),
     config: str | None = typer.Option(None, help="Path to YAML config."),
     verbose: bool = typer.Option(False, "--verbose"),
@@ -178,6 +208,62 @@ def analyze_portfolio(
         annualization_factor=cfg.annualization_factor,
         risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
     )
+    if metric_mode == "parametric":
+        metrics["var_parametric"] = compute_var(
+            port,
+            alpha=cfg.metrics.default_alpha,
+            method="parametric",
+            dist=parametric_dist,
+            t_df=student_t_df,
+        )
+        metrics["cvar_parametric"] = compute_cvar(
+            port,
+            alpha=cfg.metrics.default_alpha,
+            method="parametric",
+            dist=parametric_dist,
+            t_df=student_t_df,
+        )
+        metrics["cdar_parametric"] = compute_cdar_parametric(
+            dd,
+            alpha=cfg.metrics.default_alpha,
+            dist=parametric_dist,
+            t_df=student_t_df,
+        )
+
+    if rolling_cdar:
+        rolling = compute_rolling_cdar(
+            dd,
+            alpha=cfg.metrics.default_alpha,
+            window=rolling_window,
+        )
+        rolling_clean = rolling.dropna()
+        metrics["rolling_cdar_last"] = (
+            float(rolling_clean.iloc[-1]) if rolling_clean.size else 0.0
+        )
+
+    if benchmark_csv:
+        benchmark_prices = _load_prices_csv(benchmark_csv)
+        benchmark_prices = align_and_clean_prices(
+            benchmark_prices,
+            cfg.data.missing_data_policy,
+        )
+        if benchmark_prices.shape[1] != 1:
+            raise typer.BadParameter("benchmark CSV must contain exactly one price column.")
+        benchmark_returns = compute_returns(
+            benchmark_prices,
+            method=cfg.metrics.return_method,
+        ).iloc[:, 0]
+        backtest = run_backtest(
+            returns=rets,
+            weights=w,
+            benchmark_returns=benchmark_returns,
+            alpha=cfg.metrics.default_alpha,
+            annualization_factor=cfg.annualization_factor,
+            risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
+        )
+        if backtest.benchmark_metrics is not None:
+            metrics.update(backtest.benchmark_metrics)
+
     metrics["drawdown_display_min_pct"] = float(dd.min() * 100.0)
     _emit(metrics, out_format)
 
@@ -188,6 +274,18 @@ def optimize_cdar(
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
     no_short: bool = typer.Option(True, "--no-short/--allow-short"),
     target_return: float | None = typer.Option(None, help="Optional target return."),
+    bounds_csv: str | None = typer.Option(
+        None,
+        help="Optional per-asset bounds CSV with columns asset,lower,upper.",
+    ),
+    gross_limit: float | None = typer.Option(
+        None,
+        help="Optional gross exposure limit. Defaults to config in long-short mode.",
+    ),
+    solver: str | None = typer.Option(
+        None,
+        help="Optional solver override (e.g., ECOS, SCS).",
+    ),
     out_format: str = typer.Option("text", "--format", help="text|json"),
     config: str | None = typer.Option(None, help="Path to YAML config."),
     verbose: bool = typer.Option(False, "--verbose"),
@@ -199,16 +297,27 @@ def optimize_cdar(
     prices = align_and_clean_prices(_load_prices_csv(prices_csv), cfg.data.missing_data_policy)
     rets = compute_returns(prices, method=cfg.metrics.return_method)
 
-    gross_limit = None if no_short else cfg.optimization.gross_exposure_limit
+    lower_bounds: np.ndarray | None = None
+    upper_bounds: np.ndarray | None = None
+    if bounds_csv:
+        lower_bounds, upper_bounds = load_asset_bounds_csv(bounds_csv, list(rets.columns))
+
+    effective_gross_limit = gross_limit
+    if effective_gross_limit is None and not no_short:
+        effective_gross_limit = cfg.optimization.gross_exposure_limit
+
     result = optimize_portfolio_cdar(
         returns=rets,
         alpha=alpha,
         no_short=no_short,
         target_return=target_return,
+        per_asset_lower=lower_bounds,
+        per_asset_upper=upper_bounds,
         weight_bounds=None,
-        gross_exposure_limit=gross_limit,
+        gross_exposure_limit=effective_gross_limit,
         annualization_factor=cfg.annualization_factor,
         risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
+        solver=solver or cfg.optimization.default_solver,
     )
     _emit(result, out_format)
 

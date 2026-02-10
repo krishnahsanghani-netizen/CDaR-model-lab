@@ -70,7 +70,10 @@ def run_backtest(
     for idx, timestamp in enumerate(returns.index):
         if schedule.iloc[idx]:
             if rebalance_mode == "dynamic":
-                current_weights = np.asarray(dynamic_optimizer(returns.iloc[: idx + 1]), dtype=float)
+                current_weights = np.asarray(
+                    dynamic_optimizer(returns.iloc[: idx + 1]),
+                    dtype=float,
+                )
                 validate_weights(
                     current_weights,
                     no_short=no_short,
@@ -95,13 +98,20 @@ def run_backtest(
 
     benchmark_metrics: dict[str, float] | None = None
     if benchmark_returns is not None:
-        aligned = pd.concat([portfolio_returns, benchmark_returns.rename("benchmark")], axis=1).dropna()
+        aligned = pd.concat(
+            [portfolio_returns, benchmark_returns.rename("benchmark")],
+            axis=1,
+        ).dropna()
         active_returns = aligned["portfolio_return"] - aligned["benchmark"]
         active_values = compute_cumulative_value(active_returns, initial_value=1.0)
         active_drawdown = compute_drawdown_curve(active_values)
         tracking_error = float(active_returns.std(ddof=1) * np.sqrt(annualization_factor))
         information_ratio = (
-            float(active_returns.mean() / active_returns.std(ddof=1) * np.sqrt(annualization_factor))
+            float(
+                active_returns.mean()
+                / active_returns.std(ddof=1)
+                * np.sqrt(annualization_factor)
+            )
             if active_returns.std(ddof=1) != 0
             else 0.0
         )

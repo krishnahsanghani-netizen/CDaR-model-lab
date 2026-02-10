@@ -92,13 +92,25 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def build_config(config_path: str | Path | None = None, overrides: dict[str, Any] | None = None) -> AppConfig:
+def build_config(
+    config_path: str | Path | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> AppConfig:
     """Build application config with precedence: overrides > YAML > defaults."""
     merged: dict[str, Any] = {}
     if config_path is not None:
         merged.update(load_yaml_config(config_path))
     if overrides:
         merged = deep_merge(merged, overrides)
+    return AppConfig.model_validate(merged)
+
+
+def merge_config(config: AppConfig, overrides: dict[str, Any] | None = None) -> AppConfig:
+    """Merge nested overrides into an existing config model."""
+    if not overrides:
+        return config
+    base = config.model_dump()
+    merged = deep_merge(base, overrides)
     return AppConfig.model_validate(merged)
 
 
