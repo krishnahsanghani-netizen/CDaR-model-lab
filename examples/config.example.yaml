@@ -1,0 +1,23 @@
+data:
+  frequency: daily
+  cache_dir: cache
+  use_cache: true
+  refresh_cache: false
+  missing_data_policy: ffill_then_drop
+
+metrics:
+  return_method: simple
+  default_alpha: 0.95
+  risk_free_rate_annual: 0.03
+  rolling_cdar_window: 63
+
+optimization:
+  no_short: true
+  gross_exposure_limit: 2.0
+  default_solver: ECOS
+  fallback_solver: SCS
+
+backtest:
+  rebalance_calendar: M
+  rebalance_every_n_periods: null
+  rebalance_mode: fixed

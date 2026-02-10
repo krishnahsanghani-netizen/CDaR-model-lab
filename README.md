@@ -55,10 +55,16 @@ enhanced-cdar optimize-cdar --prices-csv data/prices.csv --alpha 0.95 --no-short
 enhanced-cdar run-pipeline
 ```
 
+Python script example:
+```bash
+python examples/example_basic_pipeline.py
+```
+
 ## Configuration
 - YAML supported via `--config`.
 - Precedence: CLI flags > YAML config > package defaults.
 - Frequency-aware annualization: daily=252, weekly=52, monthly=12.
+- Example YAML config: `examples/config.example.yaml`.
 
 ## Notes on Conventions
 - Drawdown is stored internally as negative values (`0` at peaks, negative underwater).

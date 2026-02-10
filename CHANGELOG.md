@@ -27,6 +27,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Nested config merge helper `merge_config` for reliable override precedence.
 - `analyze-portfolio` enhancements for optional benchmark-relative metrics, rolling CDaR, and optional parametric metric outputs.
 - `optimize-cdar` enhancements for optional per-asset bounds CSV, gross limit override, and solver override.
+- Example reproducibility config at `examples/config.example.yaml`.
+- CI-runnable Python example script at `examples/example_basic_pipeline.py`.
+- CLI benchmark-path test coverage for tracking error and information ratio output.
+- Package build dependency and CI build step (`python -m build`).
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
