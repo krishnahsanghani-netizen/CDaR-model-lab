@@ -1,0 +1,43 @@
+# CLI Usage Examples
+
+## Fetch Data
+```bash
+enhanced-cdar fetch-data \
+  --tickers SPY,AGG,GLD,QQQ \
+  --start 2021-01-01 \
+  --end 2026-01-01 \
+  --output data/prices.csv
+```
+
+## Analyze Fixed Weights
+```bash
+enhanced-cdar analyze-portfolio \
+  --prices-csv data/prices.csv \
+  --weights 0.25,0.25,0.25,0.25 \
+  --alpha 0.95 \
+  --format text
+```
+
+## Optimize CDaR
+```bash
+enhanced-cdar optimize-cdar \
+  --prices-csv data/prices.csv \
+  --alpha 0.95 \
+  --no-short \
+  --format json
+```
+
+## Build Frontier + Plot
+```bash
+enhanced-cdar frontier \
+  --prices-csv data/prices.csv \
+  --alpha 0.95 \
+  --n-points 20 \
+  --output-csv runs/frontier.csv \
+  --plot-path runs/frontier.html
+```
+
+## End-to-End Pipeline
+```bash
+enhanced-cdar run-pipeline
+```
