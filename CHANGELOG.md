@@ -47,3 +47,6 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Wrapped all remaining >100-character Python lines across `src/` and `tests/` to satisfy repository line-length linting.
 - Rewrote `examples/example_basic_pipeline.ipynb` cell sources with valid newline encoding to fix Ruff notebook parsing/syntax failures.
 - Resolved Ruff `UP035`, `F401`, and `E741` issues in data/backtest/optimization modules.
+- Fixed Python 3.10 compatibility in data metadata timestamps by replacing `datetime.UTC` with `timezone.utc`.
+- Added `types-PyYAML` to development dependencies to satisfy mypy typed-import checks.
+- Fixed mypy typing issues in CDaR/loss helper return types, dynamic optimizer callback narrowing, and CLI lambda-grid tuple typing.

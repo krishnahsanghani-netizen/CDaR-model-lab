@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy import stats
 
@@ -182,11 +183,12 @@ def summarize_core_metrics(
 
 
 
-def _losses(portfolio_returns: pd.Series) -> np.ndarray:
-    clean = portfolio_returns.dropna().to_numpy(dtype=float)
+def _losses(portfolio_returns: pd.Series) -> npt.NDArray[np.float64]:
+    clean = np.asarray(portfolio_returns.dropna().to_numpy(dtype=float), dtype=np.float64)
     if clean.size == 0:
         raise ValueError("portfolio_returns has no valid observations.")
-    return -clean
+    out = -clean
+    return np.asarray(out, dtype=np.float64)
 
 
 

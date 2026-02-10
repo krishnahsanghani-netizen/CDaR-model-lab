@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 
@@ -54,8 +55,9 @@ def _validate_alpha(alpha: float) -> None:
 
 
 
-def _to_magnitudes(drawdown_series: pd.Series) -> np.ndarray:
+def _to_magnitudes(drawdown_series: pd.Series) -> npt.NDArray[np.float64]:
     if drawdown_series.empty:
         raise ValueError("drawdown_series is empty.")
-    clean = drawdown_series.dropna().to_numpy(dtype=float)
-    return np.maximum(-clean, 0.0)
+    clean = np.asarray(drawdown_series.dropna().to_numpy(dtype=float), dtype=np.float64)
+    out = np.maximum(-clean, 0.0)
+    return np.asarray(out, dtype=np.float64)

@@ -384,7 +384,14 @@ def surface(
     rets = compute_returns(prices, method=cfg.metrics.return_method)
 
     grid = json.loads(lambda_grid_json)
-    lambda_grid = [tuple(map(float, row)) for row in grid]
+    lambda_grid: list[tuple[float, float, float]] = []
+    for row in grid:
+        if not isinstance(row, list | tuple) or len(row) != 3:
+            raise typer.BadParameter(
+                "Each lambda grid entry must be a 3-item list: "
+                "[lambda_cdar, lambda_var, lambda_return]."
+            )
+        lambda_grid.append((float(row[0]), float(row[1]), float(row[2])))
 
     surface_df = compute_mean_var_cdar_surface(
         returns=rets,

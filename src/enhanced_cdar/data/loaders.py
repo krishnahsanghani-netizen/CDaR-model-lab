@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -103,7 +103,7 @@ def load_from_yfinance(
 
     metadata = DataMetadata(
         source="yfinance",
-        downloaded_at_utc=datetime.now(UTC).isoformat(),
+        downloaded_at_utc=datetime.now(timezone.utc).isoformat(),
         tickers=tickers_clean,
         start=start,
         end=end,

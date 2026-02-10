@@ -69,6 +69,8 @@ def run_backtest(
     for idx, timestamp in enumerate(returns.index):
         if schedule.iloc[idx]:
             if rebalance_mode == "dynamic":
+                if dynamic_optimizer is None:
+                    raise ValueError("dynamic rebalancing requires dynamic_optimizer callback.")
                 current_weights = np.asarray(
                     dynamic_optimizer(returns.iloc[: idx + 1]),
                     dtype=float,
