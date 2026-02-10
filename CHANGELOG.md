@@ -75,6 +75,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added regime validation tests for non-datetime index rejection and minimum-period filtering.
 - Removed `type: ignore` in regime CLI by explicit `RegimeFrequency` narrowing/cast.
 - Updated README quality-gate section to reflect current CI checks.
+- Added explicit release readiness checklist in `RELEASE_CHECKLIST.md`.
+- Added config precedence test coverage for YAML + override merging behavior.
+- Added dynamic rebalancing backtest coverage verifying optimizer callback path.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
