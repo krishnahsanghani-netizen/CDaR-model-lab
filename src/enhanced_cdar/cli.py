@@ -34,6 +34,7 @@ from enhanced_cdar.portfolio.optimization import (
     compute_mean_var_cdar_surface,
     optimize_portfolio_cdar,
 )
+from enhanced_cdar.portfolio.regime import compare_regime_cdar, compute_regime_metrics
 from enhanced_cdar.portfolio.scenario import evaluate_portfolio_scenarios, preset_scenarios
 from enhanced_cdar.portfolio.weights import load_asset_bounds_csv
 from enhanced_cdar.viz.frontier import plot_cdar_efficient_frontier
@@ -785,6 +786,59 @@ def scenario_analysis(
     payload = {
         "scenario_count": int(len(scenario_df)),
         "results": scenario_df.to_dict(orient="records"),
+    }
+    if output_csv:
+        payload["output_csv"] = output_csv
+    _emit(payload, out_format)
+
+
+@app.command("regime")
+def regime_analysis(
+    prices_csv: str = typer.Option(..., help="Input prices CSV."),
+    weights: str = typer.Option(..., help="Comma-separated weights."),
+    alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    regime_frequency: str = typer.Option("Y", help="Y|Q|M regime split."),
+    min_periods: int = typer.Option(10, help="Minimum observations per regime."),
+    output_csv: str | None = typer.Option(
+        None,
+        help="Optional output CSV path for regime metrics.",
+    ),
+    out_format: str = typer.Option("text", "--format", help="text|json"),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+    verbose: bool = typer.Option(False, "--verbose"),
+    quiet: bool = typer.Option(False, "--quiet"),
+) -> None:
+    """Compare CDaR and related metrics across time regimes."""
+    _configure_logging(verbose, quiet)
+    cfg = _load_config(config)
+    prices = align_and_clean_prices(_load_prices_csv(prices_csv), cfg.data.missing_data_policy)
+    rets = compute_returns(prices, method=cfg.metrics.return_method)
+
+    w = _parse_weights(weights)
+    if len(w) != rets.shape[1]:
+        raise typer.BadParameter("weights length does not match number of assets in prices file.")
+    if regime_frequency not in {"Y", "Q", "M"}:
+        raise typer.BadParameter("regime_frequency must be one of Y, Q, M.")
+
+    regime_df = compute_regime_metrics(
+        returns=rets,
+        weights=w,
+        alpha=alpha,
+        regime_frequency=regime_frequency,  # type: ignore[arg-type]
+        annualization_factor=cfg.annualization_factor,
+        risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
+        min_periods=min_periods,
+    )
+    comparison = compare_regime_cdar(regime_df)
+
+    if output_csv:
+        Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
+        regime_df.to_csv(output_csv, index=False)
+
+    payload = {
+        "regime_count": int(len(regime_df)),
+        "comparison": comparison,
+        "results": regime_df.to_dict(orient="records"),
     }
     if output_csv:
         payload["output_csv"] = output_csv

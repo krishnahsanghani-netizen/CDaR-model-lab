@@ -6,6 +6,7 @@ from enhanced_cdar.portfolio.optimization import (
     compute_mean_var_cdar_surface,
     optimize_portfolio_cdar,
 )
+from enhanced_cdar.portfolio.regime import compare_regime_cdar, compute_regime_metrics
 from enhanced_cdar.portfolio.scenario import (
     build_scenario_returns,
     evaluate_portfolio_scenarios,
@@ -19,6 +20,8 @@ __all__ = [
     "optimize_portfolio_cdar",
     "compute_cdar_efficient_frontier",
     "compute_mean_var_cdar_surface",
+    "compute_regime_metrics",
+    "compare_regime_cdar",
     "build_scenario_returns",
     "evaluate_portfolio_scenarios",
     "preset_scenarios",

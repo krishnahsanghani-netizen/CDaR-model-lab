@@ -220,3 +220,39 @@ def test_scenario_command_with_preset(tmp_path: Path):
     assert result.exit_code == 0
     assert "scenario_count" in result.stdout
     assert output_path.exists()
+
+
+def test_regime_command_outputs_json(tmp_path: Path):
+    prices = pd.DataFrame(
+        {
+            "A": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+            "B": [50, 50.2, 50.4, 50.5, 50.6, 50.7, 50.9, 51.0, 51.2, 51.3, 51.4],
+        },
+        index=pd.date_range("2024-01-01", periods=11, freq="M"),
+    )
+    prices_path = tmp_path / "prices.csv"
+    output_path = tmp_path / "regime.csv"
+    prices.to_csv(prices_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "regime",
+            "--prices-csv",
+            str(prices_path),
+            "--weights",
+            "0.5,0.5",
+            "--regime-frequency",
+            "Q",
+            "--min-periods",
+            "2",
+            "--output-csv",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "regime_count" in result.stdout
+    assert output_path.exists()

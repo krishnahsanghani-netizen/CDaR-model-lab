@@ -47,6 +47,7 @@ Commands:
 - `frontier`
 - `surface`
 - `scenario`
+- `regime`
 - `run-pipeline`
 
 Examples:
@@ -58,6 +59,7 @@ enhanced-cdar optimize-cdar --prices-csv data/prices.csv --alpha 0.95 --no-short
 enhanced-cdar frontier --prices-csv data/prices.csv --n-points 20 --allow-short --gross-limit 2.0
 enhanced-cdar surface --prices-csv data/prices.csv --lambda-preset medium --no-parallel
 enhanced-cdar scenario --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --scenario-preset basic
+enhanced-cdar regime --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --regime-frequency Q
 enhanced-cdar run-pipeline
 ```
 

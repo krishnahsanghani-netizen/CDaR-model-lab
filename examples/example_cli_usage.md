@@ -73,3 +73,14 @@ enhanced-cdar scenario \
   --output-csv runs/scenario_results.csv \
   --format json
 ```
+
+## Regime Analysis
+```bash
+enhanced-cdar regime \
+  --prices-csv data/prices.csv \
+  --weights 0.25,0.25,0.25,0.25 \
+  --regime-frequency Q \
+  --min-periods 20 \
+  --output-csv runs/regime_results.csv \
+  --format json
+```

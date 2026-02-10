@@ -62,6 +62,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - optional custom `--scenarios-json`,
   - optional CSV export of scenario results.
 - Added scenario unit and CLI test coverage.
+- Added regime analysis API in `portfolio/regime.py` for yearly/quarterly/monthly subperiod metrics.
+- Added `regime` CLI command for cross-regime CDaR comparison with CSV export.
+- Added regime unit and CLI test coverage.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
