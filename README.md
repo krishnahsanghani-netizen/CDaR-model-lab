@@ -36,6 +36,36 @@ opt = optimize_portfolio_cdar(returns, alpha=0.95, no_short=True)
 print(opt["weights"], opt["cdar"], opt["status"])
 ```
 
+## API Overview
+- Data
+  - `enhanced_cdar.data.load_from_csv`
+  - `enhanced_cdar.data.load_from_yfinance`
+  - `enhanced_cdar.data.align_and_clean_prices`
+- Metrics
+  - `enhanced_cdar.metrics.compute_returns`
+  - `enhanced_cdar.metrics.compute_drawdown_curve`
+  - `enhanced_cdar.metrics.compute_cdar`
+  - `enhanced_cdar.metrics.summarize_core_metrics`
+- Portfolio / Optimization
+  - `enhanced_cdar.portfolio.run_backtest`
+  - `enhanced_cdar.portfolio.optimize_portfolio_cdar`
+  - `enhanced_cdar.portfolio.compute_cdar_efficient_frontier`
+  - `enhanced_cdar.portfolio.compute_mean_var_cdar_surface`
+  - `enhanced_cdar.portfolio.evaluate_portfolio_scenarios`
+  - `enhanced_cdar.portfolio.compute_regime_metrics`
+- Visualization
+  - `enhanced_cdar.viz.plot_underwater`
+  - `enhanced_cdar.viz.plot_cdar_efficient_frontier`
+  - `enhanced_cdar.viz.plot_mean_variance_cdar_surface`
+
+## Mathematical Notes
+- Drawdown is computed as `value / running_peak - 1`, internally non-positive.
+- CDaR reports positive drawdown magnitude in tail.
+- Optimization uses a convex proxy with auxiliary variables (`eta`, `xi`) and supports:
+  - return target constraint,
+  - explicit CDaR target constraint,
+  - bounds and gross exposure constraints.
+
 ## CLI Overview
 Entry point: `enhanced-cdar`
 

@@ -92,11 +92,14 @@ def optimize_portfolio_cdar(
 
     # CVaR-on-drawdown proxy objective.
     constraints += [xi >= x - eta, xi >= 0]
+    cdar_proxy = eta + (1.0 / ((1.0 - alpha) * t_count)) * cp.sum(xi)
 
     if target_return is not None:
         constraints.append(mu @ w >= target_return)
+    if target_cdar is not None:
+        constraints.append(cdar_proxy <= target_cdar)
 
-    objective = cp.Minimize(eta + (1.0 / ((1.0 - alpha) * t_count)) * cp.sum(xi))
+    objective = cp.Minimize(cdar_proxy)
     problem = cp.Problem(objective, constraints)
 
     status = _solve_with_fallback(problem, primary=solver or "ECOS", fallback="SCS")

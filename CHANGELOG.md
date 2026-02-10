@@ -7,6 +7,17 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ## [Unreleased]
 
 ### Added
+- N/A
+
+### Changed
+- N/A
+
+### Fixed
+- N/A
+
+## [0.1.0] - 2026-02-10
+
+### Added
 - Initial planning document in `IMPLEMENTATION_PLAN.md`.
 - Repository scaffold for the enhanced CDaR package.
 - Packaging and tooling setup via `pyproject.toml`, pinned `requirements.txt`, and CI workflow for Python 3.10/3.11.
@@ -78,6 +89,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added explicit release readiness checklist in `RELEASE_CHECKLIST.md`.
 - Added config precedence test coverage for YAML + override merging behavior.
 - Added dynamic rebalancing backtest coverage verifying optimizer callback path.
+- Added pipeline integration-style CLI test for artifact generation via mocked data fetch.
+- Added optimization test coverage for explicit `target_cdar` support.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
@@ -95,3 +108,4 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added `types-PyYAML` to development dependencies to satisfy mypy typed-import checks.
 - Fixed mypy typing issues in CDaR/loss helper return types, dynamic optimizer callback narrowing, and CLI lambda-grid tuple typing.
 - Fixed Python 3.10 mypy scalar inference in historical VaR/CVaR quantile handling.
+- Enforced `target_cdar` as an explicit optimization constraint in CDaR solver formulation.

@@ -55,3 +55,22 @@ def test_optimize_portfolio_cdar_infeasible_has_message():
     if result["status"] != "optimal":
         assert "message" in result
         assert isinstance(result["message"], str)
+
+
+def test_target_cdar_constraint_supported():
+    returns = pd.DataFrame(
+        {
+            "A": [0.01, -0.03, 0.02, -0.01, 0.01, -0.02],
+            "B": [0.005, -0.01, 0.008, -0.004, 0.004, -0.006],
+            "C": [0.015, -0.02, 0.01, -0.005, 0.006, -0.01],
+        }
+    )
+    result = optimize_portfolio_cdar(
+        returns,
+        alpha=0.9,
+        target_cdar=0.5,
+        no_short=True,
+        weight_bounds=(0.0, 1.0),
+    )
+    assert "status" in result
+    assert "message" in result
