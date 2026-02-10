@@ -3,11 +3,70 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
+
+def make_cdar_frontier_figure(
+    frontier_df: pd.DataFrame,
+    current_point: dict[str, Any] | None = None,
+    theme: str = "plotly_white",
+) -> go.Figure:
+    """Build interactive Mean-CDaR frontier figure for UI usage."""
+    valid = frontier_df.dropna(subset=["cdar", "achieved_return"]).copy()
+    if valid.empty:
+        raise ValueError("No feasible points available to plot frontier.")
+
+    fig = px.line(
+        valid,
+        x="cdar",
+        y="achieved_return",
+        markers=True,
+        title="Mean-CDaR Efficient Frontier",
+        color_discrete_sequence=["#1f77b4"],
+        template=theme,
+    )
+    fig.update_traces(
+        hovertemplate="CDaR=%{x:.4f}<br>Return=%{y:.4f}<extra></extra>",
+    )
+    if "volatility" in valid.columns:
+        fig.update_traces(marker=dict(color=valid["volatility"], colorscale="Viridis"))
+
+    if current_point is not None:
+        cdar = current_point.get("cdar")
+        ret = current_point.get("expected_return")
+        if cdar is not None and ret is not None:
+            fig.add_scatter(
+                x=[float(cdar)],
+                y=[float(ret)],
+                mode="markers",
+                name="Selected Portfolio",
+                marker=dict(size=12, color="#d62728", symbol="x"),
+            )
+
+    min_cdar_idx = valid["cdar"].idxmin()
+    max_return_idx = valid["achieved_return"].idxmax()
+    fig.add_scatter(
+        x=[valid.loc[min_cdar_idx, "cdar"]],
+        y=[valid.loc[min_cdar_idx, "achieved_return"]],
+        mode="markers",
+        name="Min CDaR",
+        marker=dict(size=10, color="#2ca02c"),
+    )
+    fig.add_scatter(
+        x=[valid.loc[max_return_idx, "cdar"]],
+        y=[valid.loc[max_return_idx, "achieved_return"]],
+        mode="markers",
+        name="Max Return",
+        marker=dict(size=10, color="#9467bd"),
+    )
+    fig.update_xaxes(title_text="CDaR")
+    fig.update_yaxes(title_text="Expected Return")
+    return fig
 
 
 def plot_cdar_efficient_frontier(
@@ -52,23 +111,8 @@ def plot_cdar_efficient_frontier(
             plt.show()
         return fig
 
-    fig = px.line(valid, x="cdar", y="achieved_return", markers=True, title=plot_title)
-    fig.add_scatter(
-        x=[valid.loc[min_cdar_idx, "cdar"]],
-        y=[valid.loc[min_cdar_idx, "achieved_return"]],
-        mode="markers",
-        name="Min CDaR",
-        marker=dict(size=12),
-    )
-    fig.add_scatter(
-        x=[valid.loc[max_return_idx, "cdar"]],
-        y=[valid.loc[max_return_idx, "achieved_return"]],
-        mode="markers",
-        name="Max Return",
-        marker=dict(size=12),
-    )
-    fig.update_xaxes(title_text="CDaR")
-    fig.update_yaxes(title_text="Expected Return")
+    fig = make_cdar_frontier_figure(valid)
+    fig.update_layout(title=plot_title)
 
     if save_path:
         _save_plotly(fig, save_path)
@@ -77,8 +121,7 @@ def plot_cdar_efficient_frontier(
     return fig
 
 
-
-def _save_plotly(fig, save_path: str) -> None:
+def _save_plotly(fig: go.Figure, save_path: str) -> None:
     out = Path(save_path)
     if out.suffix.lower() == ".html":
         fig.write_html(str(out))

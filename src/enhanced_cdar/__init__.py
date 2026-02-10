@@ -4,4 +4,4 @@ from enhanced_cdar.config import AppConfig, build_config, merge_config
 
 __all__ = ["AppConfig", "build_config", "merge_config"]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

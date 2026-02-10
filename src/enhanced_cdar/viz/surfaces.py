@@ -7,7 +7,37 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
+
+def make_mean_variance_cdar_surface_figure(
+    surface_df: pd.DataFrame,
+    theme: str = "plotly_white",
+) -> go.Figure:
+    """Create interactive 3D mean-variance-CDaR surface for UI rendering."""
+    frame = surface_df.dropna(subset=["volatility", "cdar", "expected_return"]).copy()
+    if frame.empty:
+        raise ValueError("No feasible points available to plot surface.")
+
+    color_col = "max_drawdown" if "max_drawdown" in frame.columns else "cdar"
+    fig = px.scatter_3d(
+        frame,
+        x="volatility",
+        y="cdar",
+        z="expected_return",
+        color=color_col,
+        title="Mean-Variance-CDaR Surface",
+        template=theme,
+    )
+    fig.update_traces(marker=dict(size=4, opacity=0.85))
+    fig.update_layout(
+        scene=dict(
+            xaxis_title="Volatility",
+            yaxis_title="CDaR",
+            zaxis_title="Expected Return",
+        )
+    )
+    return fig
 
 
 def plot_mean_variance_cdar_surface(
@@ -52,14 +82,7 @@ def plot_mean_variance_cdar_surface(
         return fig
 
     if mode == "3d":
-        fig = px.scatter_3d(
-            frame,
-            x="volatility",
-            y="cdar",
-            z="expected_return",
-            color="max_drawdown" if "max_drawdown" in frame.columns else "cdar",
-            title="Mean-Variance-CDaR Surface",
-        )
+        fig = make_mean_variance_cdar_surface_figure(frame)
     elif mode == "2d-projections":
         fig = px.scatter(
             frame,
@@ -78,8 +101,7 @@ def plot_mean_variance_cdar_surface(
     return fig
 
 
-
-def _save_plotly(fig, save_path: str) -> None:
+def _save_plotly(fig: go.Figure, save_path: str) -> None:
     out = Path(save_path)
     if out.suffix.lower() == ".html":
         fig.write_html(str(out))

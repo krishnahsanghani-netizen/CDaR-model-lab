@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any, cast
@@ -44,6 +46,14 @@ from enhanced_cdar.portfolio.weights import load_asset_bounds_csv
 from enhanced_cdar.viz.frontier import plot_cdar_efficient_frontier
 from enhanced_cdar.viz.surfaces import plot_mean_variance_cdar_surface
 from enhanced_cdar.viz.underwater import plot_underwater
+from enhanced_cdar.viz.animation import (
+    StepMode,
+    animate_frontier_over_time,
+    animate_surface_over_time,
+    animate_underwater,
+    generate_frontier_snapshots,
+    generate_surface_snapshots,
+)
 
 app = typer.Typer(help="Enhanced CDaR modeling toolkit")
 LOGGER = logging.getLogger(__name__)
@@ -146,6 +156,47 @@ def _json_default(value: Any) -> Any:
     if isinstance(value, pd.Timestamp):
         return value.isoformat()
     raise TypeError(f"Object of type {type(value)} is not JSON serializable")
+
+
+def _resolve_prices_for_animation(
+    run_dir: str | None,
+    prices_csv: str | None,
+) -> Path:
+    """Resolve source prices path with run-dir precedence."""
+    if run_dir:
+        candidate = Path(run_dir) / "data" / "prices.csv"
+        if candidate.exists():
+            return candidate
+        raise typer.BadParameter(f"Could not find prices file in run directory: {candidate}")
+    if prices_csv:
+        path = Path(prices_csv)
+        if path.exists():
+            return path
+        raise typer.BadParameter(f"prices CSV not found: {path}")
+    raise typer.BadParameter("Provide either --run-dir or --prices-csv.")
+
+
+def _new_videos_dir(output_root: str = "runs") -> Path:
+    run_dir = Path(output_root) / pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    videos_dir = run_dir / "videos"
+    videos_dir.mkdir(parents=True, exist_ok=True)
+    return videos_dir
+
+
+def _write_video_manifest(
+    videos_dir: Path,
+    files: list[dict[str, Any]],
+    extra: dict[str, Any] | None = None,
+) -> Path:
+    payload: dict[str, Any] = {
+        "created_at_utc": pd.Timestamp.utcnow().isoformat(),
+        "files": files,
+    }
+    if extra:
+        payload.update(extra)
+    manifest_path = videos_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+    return manifest_path
 
 
 @app.command("fetch-data")
@@ -728,6 +779,268 @@ def run_pipeline(
     )
 
     typer.echo(f"Run artifacts saved to: {run_dir}")
+
+
+@app.command("ui")
+def launch_ui(
+    port: int = typer.Option(8501, help="Port for Streamlit app."),
+    server_headless: str = typer.Option(
+        "true",
+        help="Run Streamlit in headless mode (true|false).",
+    ),
+    streamlit_args: list[str] | None = typer.Argument(
+        None,
+        help="Additional args forwarded to Streamlit (e.g. --browser.gatherUsageStats false).",
+    ),
+) -> None:
+    """Launch CDaR Lab Streamlit UI."""
+    if server_headless.lower() not in {"true", "false"}:
+        raise typer.BadParameter("--server-headless must be true or false.")
+    repo_root = Path(__file__).resolve().parents[2]
+    app_path = repo_root / "ui" / "streamlit_app.py"
+    if not app_path.exists():
+        raise typer.BadParameter(f"Streamlit app not found at: {app_path}")
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        "--server.port",
+        str(port),
+        "--server.headless",
+        server_headless.lower(),
+    ]
+    cmd.extend(streamlit_args or [])
+    raise typer.Exit(subprocess.call(cmd))
+
+
+@app.command("animate-underwater")
+def animate_underwater_cmd(
+    run_dir: str | None = typer.Option(
+        None,
+        help="Existing run directory (preferred). If provided, data/prices.csv is used.",
+    ),
+    prices_csv: str | None = typer.Option(None, help="Input prices CSV."),
+    weights: str | None = typer.Option(
+        None,
+        help=(
+            "Optional comma-separated weights. "
+            "Defaults to run optimization weights or equal-weight."
+        ),
+    ),
+    alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    fps: int = typer.Option(12, help="Animation frames per second."),
+    dpi: int = typer.Option(120, help="Render DPI."),
+    max_frames: int = typer.Option(300, help="Maximum frames after downsampling."),
+    output_root: str = typer.Option("runs", help="Root directory for generated video runs."),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+) -> None:
+    """Generate underwater animation MP4/GIF with ffmpeg fallback."""
+    cfg = _load_config(config)
+    prices_path = _resolve_prices_for_animation(run_dir, prices_csv)
+    prices = align_and_clean_prices(
+        _load_prices_csv(str(prices_path)),
+        cfg.data.missing_data_policy,
+    )
+    returns = compute_returns(prices, method=cfg.metrics.return_method)
+
+    if weights:
+        weight_vec = _parse_weights(weights)
+    elif run_dir and (Path(run_dir) / "results" / "optimization.json").exists():
+        opt = json.loads(
+            (Path(run_dir) / "results" / "optimization.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        weight_vec = np.asarray(opt.get("weights", []), dtype=float)
+    else:
+        weight_vec = np.full(returns.shape[1], 1.0 / returns.shape[1])
+    if len(weight_vec) != returns.shape[1]:
+        raise typer.BadParameter("Weights length does not match number of assets.")
+
+    port_returns = compute_portfolio_returns(returns, weight_vec)
+    values = compute_cumulative_value(port_returns)
+    drawdown = compute_drawdown_curve(values)
+
+    videos_dir = _new_videos_dir(output_root=output_root)
+    output_path = videos_dir / "underwater.mp4"
+    generated = animate_underwater(
+        values=values,
+        drawdown=drawdown,
+        fps=fps,
+        dpi=dpi,
+        save_path=str(output_path),
+        max_frames=max_frames,
+    )
+    manifest = _write_video_manifest(
+        videos_dir,
+        files=[{"type": "underwater", "path": generated}],
+        extra={"alpha": alpha, "fps": fps, "dpi": dpi, "max_frames": max_frames},
+    )
+    typer.echo(f"Generated underwater animation: {generated}")
+    typer.echo(f"Manifest: {manifest}")
+
+
+@app.command("animate-frontier")
+def animate_frontier_cmd(
+    run_dir: str | None = typer.Option(
+        None,
+        help="Existing run directory (preferred). If provided, data/prices.csv is used.",
+    ),
+    prices_csv: str | None = typer.Option(None, help="Input prices CSV."),
+    snapshots_json: str | None = typer.Option(
+        None,
+        help="Optional JSON file with [{\"label\": ..., \"csv\": ...}] precomputed snapshots.",
+    ),
+    alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
+    lookback: int = typer.Option(252, help="Rolling lookback window (periods)."),
+    step_mode: str = typer.Option("monthly", help="monthly|quarterly|custom"),
+    step_n: int = typer.Option(21, help="Step size used when step-mode=custom."),
+    fps: int = typer.Option(10, help="Animation frames per second."),
+    dpi: int = typer.Option(120, help="Render DPI."),
+    max_frames: int = typer.Option(300, help="Maximum frames after downsampling."),
+    output_root: str = typer.Option("runs", help="Root directory for generated video runs."),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+) -> None:
+    """Generate efficient frontier evolution animation over rolling windows."""
+    if step_mode not in {"monthly", "quarterly", "custom"}:
+        raise typer.BadParameter("step-mode must be one of monthly|quarterly|custom.")
+    cfg = _load_config(config)
+    prices_path = _resolve_prices_for_animation(run_dir, prices_csv)
+    prices = align_and_clean_prices(
+        _load_prices_csv(str(prices_path)),
+        cfg.data.missing_data_policy,
+    )
+    returns = compute_returns(prices, method=cfg.metrics.return_method)
+
+    snapshots: list[tuple[str, pd.DataFrame]]
+    if snapshots_json:
+        spec = json.loads(Path(snapshots_json).read_text(encoding="utf-8"))
+        snapshots = []
+        for row in spec:
+            label = str(row["label"])
+            csv_path = Path(str(row["csv"]))
+            snapshots.append((label, pd.read_csv(csv_path)))
+    else:
+        snapshots = generate_frontier_snapshots(
+            returns=returns,
+            alpha=alpha,
+            no_short=no_short,
+            lookback=lookback,
+            step_mode=cast(StepMode, step_mode),
+            step_n=step_n,
+            max_snapshots=max_frames,
+        )
+    if not snapshots:
+        raise typer.BadParameter("No frontier snapshots were produced.")
+
+    videos_dir = _new_videos_dir(output_root=output_root)
+    output_path = videos_dir / "frontier_over_time.mp4"
+    generated = animate_frontier_over_time(
+        frontier_snapshots=snapshots,
+        fps=fps,
+        dpi=dpi,
+        save_path=str(output_path),
+        max_frames=max_frames,
+    )
+    manifest = _write_video_manifest(
+        videos_dir,
+        files=[{"type": "frontier", "path": generated}],
+        extra={
+            "alpha": alpha,
+            "fps": fps,
+            "dpi": dpi,
+            "max_frames": max_frames,
+            "lookback": lookback,
+            "step_mode": step_mode,
+            "step_n": step_n,
+        },
+    )
+    typer.echo(f"Generated frontier animation: {generated}")
+    typer.echo(f"Manifest: {manifest}")
+
+
+@app.command("animate-surface")
+def animate_surface_cmd(
+    run_dir: str | None = typer.Option(
+        None,
+        help="Existing run directory (preferred). If provided, data/prices.csv is used.",
+    ),
+    prices_csv: str | None = typer.Option(None, help="Input prices CSV."),
+    snapshots_json: str | None = typer.Option(
+        None,
+        help="Optional JSON file with [{\"label\": ..., \"csv\": ...}] precomputed snapshots.",
+    ),
+    alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
+    lookback: int = typer.Option(252, help="Rolling lookback window (periods)."),
+    step_mode: str = typer.Option("monthly", help="monthly|quarterly|custom"),
+    step_n: int = typer.Option(21, help="Step size used when step-mode=custom."),
+    fps: int = typer.Option(8, help="Animation frames per second."),
+    dpi: int = typer.Option(120, help="Render DPI."),
+    max_frames: int = typer.Option(300, help="Maximum frames after downsampling."),
+    output_root: str = typer.Option("runs", help="Root directory for generated video runs."),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+) -> None:
+    """Generate mean-variance-CDaR surface evolution animation over rolling windows."""
+    if step_mode not in {"monthly", "quarterly", "custom"}:
+        raise typer.BadParameter("step-mode must be one of monthly|quarterly|custom.")
+    cfg = _load_config(config)
+    prices_path = _resolve_prices_for_animation(run_dir, prices_csv)
+    prices = align_and_clean_prices(
+        _load_prices_csv(str(prices_path)),
+        cfg.data.missing_data_policy,
+    )
+    returns = compute_returns(prices, method=cfg.metrics.return_method)
+
+    snapshots: list[tuple[str, pd.DataFrame]]
+    if snapshots_json:
+        spec = json.loads(Path(snapshots_json).read_text(encoding="utf-8"))
+        snapshots = []
+        for row in spec:
+            label = str(row["label"])
+            csv_path = Path(str(row["csv"]))
+            snapshots.append((label, pd.read_csv(csv_path)))
+    else:
+        snapshots = generate_surface_snapshots(
+            returns=returns,
+            alpha=alpha,
+            no_short=no_short,
+            lookback=lookback,
+            step_mode=cast(StepMode, step_mode),
+            step_n=step_n,
+            max_snapshots=max_frames,
+        )
+    if not snapshots:
+        raise typer.BadParameter("No surface snapshots were produced.")
+
+    videos_dir = _new_videos_dir(output_root=output_root)
+    output_path = videos_dir / "surface_over_time.mp4"
+    generated = animate_surface_over_time(
+        surface_snapshots=snapshots,
+        fps=fps,
+        dpi=dpi,
+        save_path=str(output_path),
+        max_frames=max_frames,
+    )
+    manifest = _write_video_manifest(
+        videos_dir,
+        files=[{"type": "surface", "path": generated}],
+        extra={
+            "alpha": alpha,
+            "fps": fps,
+            "dpi": dpi,
+            "max_frames": max_frames,
+            "lookback": lookback,
+            "step_mode": step_mode,
+            "step_n": step_n,
+        },
+    )
+    typer.echo(f"Generated surface animation: {generated}")
+    typer.echo(f"Manifest: {manifest}")
 
 
 @app.command("scenario")

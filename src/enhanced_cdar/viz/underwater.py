@@ -12,6 +12,70 @@ from plotly.subplots import make_subplots
 from enhanced_cdar.metrics.drawdown import compute_drawdown_curve
 
 
+def make_underwater_figure(
+    values: pd.Series,
+    drawdown: pd.Series,
+    benchmark_values: pd.Series | None = None,
+    rolling_cdar: pd.Series | None = None,
+    theme: str = "plotly_white",
+) -> go.Figure:
+    """Create an interactive underwater figure for UI rendering."""
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        subplot_titles=("Portfolio Value", "Drawdown"),
+    )
+    fig.add_trace(
+        go.Scatter(x=values.index, y=values.values, mode="lines", name="Portfolio"),
+        row=1,
+        col=1,
+    )
+    if benchmark_values is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=benchmark_values.index,
+                y=benchmark_values.values,
+                mode="lines",
+                name="Benchmark",
+                line=dict(color="gray"),
+            ),
+            row=1,
+            col=1,
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=drawdown.index,
+            y=drawdown.values,
+            mode="lines",
+            name="Drawdown",
+            line=dict(color="crimson"),
+        ),
+        row=2,
+        col=1,
+    )
+    if rolling_cdar is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=rolling_cdar.index,
+                y=-rolling_cdar.values,
+                mode="lines",
+                name="Rolling CDaR",
+                line=dict(color="darkorange", dash="dash"),
+            ),
+            row=2,
+            col=1,
+        )
+    fig.update_layout(
+        title="Portfolio Value and Underwater Drawdown",
+        template=theme,
+        height=720,
+    )
+    fig.update_yaxes(title_text="Value", row=1, col=1)
+    fig.update_yaxes(title_text="Drawdown", row=2, col=1)
+    return fig
+
 
 def plot_underwater(
     values: pd.Series,
@@ -43,27 +107,14 @@ def plot_underwater(
             plt.show()
         return fig
 
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08)
-    fig.add_trace(
-        go.Scatter(x=values.index, y=values.values, mode="lines", name="Portfolio Value"),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(x=drawdown.index, y=drawdown.values, mode="lines", name="Drawdown"),
-        row=2,
-        col=1,
-    )
-    fig.update_layout(title=chart_title, height=700)
-    fig.update_yaxes(title_text="Value", row=1, col=1)
-    fig.update_yaxes(title_text="Drawdown", row=2, col=1)
+    fig = make_underwater_figure(values=values, drawdown=drawdown)
+    fig.update_layout(title=chart_title)
 
     if save_path:
         _save_plotly(fig, save_path)
     if show:
         fig.show()
     return fig
-
 
 
 def _save_plotly(fig: go.Figure, save_path: str) -> None:

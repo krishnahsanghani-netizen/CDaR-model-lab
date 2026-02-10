@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "enhanced-cdar"
-version = "0.1.0"
+version = "0.2.0"
 description = "Enhanced Conditional Drawdown at Risk modeling toolkit"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,6 +22,7 @@ dependencies = [
   "typer>=0.12,<1",
   "yfinance>=0.2.40,<1",
   "joblib>=1.4,<2",
+  "streamlit>=1.39,<2",
 ]
 
 [project.optional-dependencies]

@@ -8,6 +8,8 @@ This project provides a Python package and CLI for:
 - Portfolio return, drawdown, CDaR, VaR/CVaR, and performance metrics.
 - CDaR-aware optimization and frontier/surface generation.
 - Underwater, frontier, and mean-variance-CDaR visualization.
+- Streamlit UI (`CDaR Lab`) for interactive analysis.
+- Animation export (MP4/GIF fallback) for underwater/frontier/surface evolution.
 
 The design targets quant developers and portfolio analysts first, with defaults that remain usable for motivated beginners.
 
@@ -55,8 +57,14 @@ print(opt["weights"], opt["cdar"], opt["status"])
   - `enhanced_cdar.portfolio.compute_regime_metrics`
 - Visualization
   - `enhanced_cdar.viz.plot_underwater`
+  - `enhanced_cdar.viz.make_underwater_figure`
   - `enhanced_cdar.viz.plot_cdar_efficient_frontier`
+  - `enhanced_cdar.viz.make_cdar_frontier_figure`
   - `enhanced_cdar.viz.plot_mean_variance_cdar_surface`
+  - `enhanced_cdar.viz.make_mean_variance_cdar_surface_figure`
+  - `enhanced_cdar.viz.animate_underwater`
+  - `enhanced_cdar.viz.animate_frontier_over_time`
+  - `enhanced_cdar.viz.animate_surface_over_time`
 
 ## Mathematical Notes
 - Drawdown is computed as `value / running_peak - 1`, internally non-positive.
@@ -79,6 +87,10 @@ Commands:
 - `scenario`
 - `regime`
 - `run-pipeline`
+- `ui`
+- `animate-underwater`
+- `animate-frontier`
+- `animate-surface`
 
 Examples:
 ```bash
@@ -91,12 +103,35 @@ enhanced-cdar surface --prices-csv data/prices.csv --lambda-preset medium --no-p
 enhanced-cdar scenario --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --scenario-preset basic
 enhanced-cdar regime --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --regime-frequency Q
 enhanced-cdar run-pipeline
+enhanced-cdar ui --port 8501 --server-headless true
+enhanced-cdar animate-underwater --run-dir runs/<timestamp>
+enhanced-cdar animate-frontier --prices-csv data/prices.csv --step-mode monthly
+enhanced-cdar animate-surface --prices-csv data/prices.csv --step-mode quarterly
 ```
 
 Python script example:
 ```bash
 python examples/example_basic_pipeline.py
 ```
+
+## Streamlit UI (CDaR Lab)
+Run locally:
+```bash
+streamlit run ui/streamlit_app.py
+```
+
+Or through CLI wrapper:
+```bash
+enhanced-cdar ui --port 8501 --server-headless true
+```
+
+UI features in v0.2.0:
+- Example/yfinance/uploaded CSV data loading with auto-detection and manual override.
+- Interactive tabs: Overview, Underwater, Frontier, 3D Surface, Animations/Export.
+- Fixed-weight periodic rebalancing controls (`none`, `monthly`, `quarterly`, `every N`).
+- Animation export to `runs/<timestamp>/videos/` with JSON manifest.
+
+Deployment target: Streamlit Community Cloud first, optional self-hosting later.
 
 ## Configuration
 - YAML supported via `--config`.
@@ -108,6 +143,7 @@ python examples/example_basic_pipeline.py
 - Drawdown is stored internally as negative values (`0` at peaks, negative underwater).
 - User-facing summaries report positive risk magnitudes for CDaR, max drawdown, VaR, and CVaR.
 - Data cache defaults to `./cache` and is reused until `--refresh` is passed.
+- Animation output prefers MP4 via ffmpeg and falls back to GIF when ffmpeg is unavailable.
 
 ## Development Quality Gates
 - CI lint gate: `ruff`

@@ -15,6 +15,48 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Fixed
 - N/A
 
+## [0.2.0] - 2026-02-10
+
+### Added
+- Streamlit UI app (`ui/streamlit_app.py`) with typed session state, sidebar controls, and tabs:
+  - Overview
+  - Underwater
+  - Frontier
+  - 3D Surface
+  - Animations / Export
+- UI helper utilities (`ui/utils.py`) for example-data loading, CSV column auto-detection, and CSV parsing.
+- UI state container (`ui/state.py`) for loaded prices, returns, computed outputs, and run artifacts.
+- Interactive Plotly figure constructors:
+  - `make_underwater_figure`
+  - `make_cdar_frontier_figure`
+  - `make_mean_variance_cdar_surface_figure`
+- Animation module (`src/enhanced_cdar/viz/animation.py`) with:
+  - underwater animation export,
+  - frontier-over-time animation export,
+  - surface-over-time animation export,
+  - rolling-window snapshot generators,
+  - automatic frame downsampling.
+- CLI commands:
+  - `enhanced-cdar ui`
+  - `enhanced-cdar animate-underwater`
+  - `enhanced-cdar animate-frontier`
+  - `enhanced-cdar animate-surface`
+- Animation CLI run-directory support with `--run-dir` precedence over `--prices-csv`.
+- Video manifest generation (`manifest.json`) for animation runs under `runs/<timestamp>/videos/`.
+- Test coverage additions:
+  - animation helper behavior and smoke artifact generation,
+  - UI utility parsing/auto-detection,
+  - CLI UI/animation command behavior.
+
+### Changed
+- Package version advanced to `0.2.0` for UI/animation feature release.
+- Visualization exports consolidated in `enhanced_cdar.viz.__init__` to expose both static and interactive helpers.
+- README expanded with Streamlit UI usage, animation CLI examples, and MP4/GIF fallback notes.
+
+### Fixed
+- Python 3.10 compatibility in Streamlit module by replacing `datetime.UTC` usage with `timezone.utc`.
+- Frontier point selection bug in UI where nearest target-return point lookup used positional indexing instead of label lookup.
+
 ## [0.1.0] - 2026-02-10
 
 ### Added
