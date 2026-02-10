@@ -65,6 +65,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added regime analysis API in `portfolio/regime.py` for yearly/quarterly/monthly subperiod metrics.
 - Added `regime` CLI command for cross-regime CDaR comparison with CSV export.
 - Added regime unit and CLI test coverage.
+- Added Phase 8 hardening tests for:
+  - weight defaults and gross-exposure constraint validation,
+  - per-asset bounds CSV loading,
+  - frontier status/message behavior under extreme target-return ranges,
+  - scenario validation edge cases,
+  - strict missing-data preprocessing policy behavior.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
