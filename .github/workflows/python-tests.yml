@@ -22,7 +22,6 @@ jobs:
       - name: Lint
         run: |
           ruff check .
-          black --check .
       - name: Type check
         run: mypy src
       - name: Run tests

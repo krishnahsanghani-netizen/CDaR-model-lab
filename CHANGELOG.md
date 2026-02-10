@@ -38,7 +38,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.
 - Switched CLI override application to validated nested config merge behavior.
-- CI lint gate now uses `ruff` and `black` checks; import ordering is not separately gated.
+- CI lint gate now runs `ruff` only; import ordering and Black checks are not separately gated.
 - Ruff rule selection updated to focus on active error classes (`E`, `F`, `UP`, `B`).
 
 ### Fixed
