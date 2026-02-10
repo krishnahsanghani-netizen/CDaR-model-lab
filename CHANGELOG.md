@@ -29,4 +29,5 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Corrected module naming to `data/preprocess.py` in scaffold.
 
 ### Fixed
-- N/A
+- Replaced invalid empty notebook placeholder with a valid JSON notebook at `examples/example_basic_pipeline.ipynb` to satisfy Ruff notebook parsing.
+- Wrapped long CLI lines in `src/enhanced_cdar/cli.py` to satisfy Ruff `E501` line-length checks.

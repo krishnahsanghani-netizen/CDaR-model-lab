@@ -151,7 +151,13 @@ def analyze_portfolio(
     cfg = _load_config(config)
     cfg = _apply_overrides(
         cfg,
-        {"data": {"frequency": frequency}, "metrics": {"default_alpha": alpha, "risk_free_rate_annual": risk_free_rate}},
+        {
+            "data": {"frequency": frequency},
+            "metrics": {
+                "default_alpha": alpha,
+                "risk_free_rate_annual": risk_free_rate,
+            },
+        },
     )
 
     prices = _load_prices_csv(prices_csv)
@@ -241,14 +247,20 @@ def frontier(
         plot_cdar_efficient_frontier(frontier_df, show=False, save_path=plot_path)
         typer.echo(f"Saved frontier plot: {plot_path}")
 
-    typer.echo(frontier_df[["target_return", "achieved_return", "cdar", "status"]].to_string(index=False))
+    frontier_preview = frontier_df[
+        ["target_return", "achieved_return", "cdar", "status"]
+    ].to_string(index=False)
+    typer.echo(frontier_preview)
 
 
 @app.command("surface")
 def surface(
     prices_csv: str = typer.Option(..., help="Input prices CSV."),
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
-    lambda_grid_json: str = typer.Option(..., help="JSON list of [lambda_cdar, lambda_var, lambda_return]."),
+    lambda_grid_json: str = typer.Option(
+        ...,
+        help="JSON list of [lambda_cdar, lambda_var, lambda_return].",
+    ),
     output_csv: str | None = typer.Option(None, help="Optional output CSV path."),
     plot_path: str | None = typer.Option(None, help="Optional plot output path (.html/.png/.svg)."),
     mode: str = typer.Option("3d", help="3d|2d-projections"),
@@ -282,7 +294,10 @@ def surface(
         plot_mean_variance_cdar_surface(surface_df, mode=mode, show=False, save_path=plot_path)
         typer.echo(f"Saved surface plot: {plot_path}")
 
-    typer.echo(surface_df[["expected_return", "volatility", "cdar", "status"]].head().to_string(index=False))
+    surface_preview = surface_df[
+        ["expected_return", "volatility", "cdar", "status"]
+    ].head().to_string(index=False)
+    typer.echo(surface_preview)
 
 
 @app.command("run-pipeline")
@@ -321,7 +336,10 @@ def run_pipeline(
     prices = align_and_clean_prices(result.prices, cfg.data.missing_data_policy)
     prices_path = data_dir / "prices.csv"
     prices.to_csv(prices_path)
-    (data_dir / "metadata.json").write_text(json.dumps(result.metadata.__dict__, indent=2), encoding="utf-8")
+    (data_dir / "metadata.json").write_text(
+        json.dumps(result.metadata.__dict__, indent=2),
+        encoding="utf-8",
+    )
 
     rets = compute_returns(prices, method=cfg.metrics.return_method)
     opt = optimize_portfolio_cdar(
@@ -334,7 +352,12 @@ def run_pipeline(
         risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
     )
 
-    frontier_df = compute_cdar_efficient_frontier(rets, alpha=alpha, n_points=20, no_short=cfg.optimization.no_short)
+    frontier_df = compute_cdar_efficient_frontier(
+        rets,
+        alpha=alpha,
+        n_points=20,
+        no_short=cfg.optimization.no_short,
+    )
     lambda_grid = [(1.0, 0.1, 0.1), (1.0, 0.5, 0.5), (1.0, 1.0, 1.0), (0.5, 1.0, 1.0)]
     surface_df = compute_mean_var_cdar_surface(
         rets,
@@ -349,11 +372,23 @@ def run_pipeline(
 
     frontier_df.to_csv(results_dir / "frontier.csv", index=False)
     surface_df.to_csv(results_dir / "surface.csv", index=False)
-    (results_dir / "optimization.json").write_text(json.dumps(opt, indent=2, default=_json_default), encoding="utf-8")
+    (results_dir / "optimization.json").write_text(
+        json.dumps(opt, indent=2, default=_json_default),
+        encoding="utf-8",
+    )
 
     plot_underwater(values, show=False, save_path=str(plots_dir / "underwater.html"))
-    plot_cdar_efficient_frontier(frontier_df, show=False, save_path=str(plots_dir / "frontier.html"))
-    plot_mean_variance_cdar_surface(surface_df, mode="3d", show=False, save_path=str(plots_dir / "surface_3d.html"))
+    plot_cdar_efficient_frontier(
+        frontier_df,
+        show=False,
+        save_path=str(plots_dir / "frontier.html"),
+    )
+    plot_mean_variance_cdar_surface(
+        surface_df,
+        mode="3d",
+        show=False,
+        save_path=str(plots_dir / "surface_3d.html"),
+    )
     plot_mean_variance_cdar_surface(
         surface_df,
         mode="2d-projections",
