@@ -43,8 +43,20 @@ enhanced-cdar frontier \
   --prices-csv data/prices.csv \
   --alpha 0.95 \
   --n-points 20 \
+  --allow-short \
+  --gross-limit 2.0 \
   --output-csv runs/frontier.csv \
   --plot-path runs/frontier.html
+```
+
+## Surface with Preset Grid
+```bash
+enhanced-cdar surface \
+  --prices-csv data/prices.csv \
+  --alpha 0.95 \
+  --lambda-preset medium \
+  --output-csv runs/surface.csv \
+  --plot-path runs/surface_3d.html
 ```
 
 ## End-to-End Pipeline

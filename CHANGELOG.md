@@ -40,6 +40,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - optional benchmark-relative analytics output,
   - optional backtest series export to CSV.
 - CLI test coverage for the `backtest` command path with benchmark and rebalancing options.
+- `frontier` CLI enhancements:
+  - explicit `--no-short/--allow-short`,
+  - optional `--gross-limit`,
+  - optional `--return-min/--return-max`,
+  - `--parallel/--no-parallel` and `--n-jobs`.
+- `surface` CLI enhancements:
+  - optional `--lambda-grid-json`,
+  - preset grids via `--lambda-preset small|medium`,
+  - explicit shorting/gross/parallel controls.
+- `run-pipeline` enhancement:
+  - explicit `--no-short/--allow-short`,
+  - writes `results/summary.json` artifact.
+- Additional CLI tests for advanced frontier and surface command paths.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.

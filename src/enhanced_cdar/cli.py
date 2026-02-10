@@ -93,6 +93,45 @@ def _emit(payload: Any, out_format: str) -> None:
 
 
 
+def _resolve_lambda_grid(
+    lambda_grid_json: str | None,
+    lambda_preset: str,
+) -> list[tuple[float, float, float]]:
+    """Resolve lambda-grid input from JSON or named preset."""
+    presets: dict[str, list[tuple[float, float, float]]] = {
+        "small": [
+            (1.0, 0.1, 0.1),
+            (1.0, 0.5, 0.5),
+            (1.0, 1.0, 1.0),
+            (0.5, 1.0, 1.0),
+        ],
+        "medium": [
+            (1.0, 0.1, 0.1),
+            (1.0, 0.3, 0.3),
+            (1.0, 0.5, 0.5),
+            (1.0, 0.8, 0.8),
+            (1.0, 1.0, 1.0),
+            (0.5, 1.0, 1.0),
+            (0.3, 1.0, 1.2),
+            (0.1, 1.2, 1.4),
+        ],
+    }
+    if lambda_grid_json:
+        grid = json.loads(lambda_grid_json)
+        lambda_grid: list[tuple[float, float, float]] = []
+        for row in grid:
+            if not isinstance(row, list | tuple) or len(row) != 3:
+                raise typer.BadParameter(
+                    "Each lambda grid entry must be a 3-item list: "
+                    "[lambda_cdar, lambda_var, lambda_return]."
+                )
+            lambda_grid.append((float(row[0]), float(row[1]), float(row[2])))
+        return lambda_grid
+    if lambda_preset not in presets:
+        raise typer.BadParameter("lambda preset must be one of: small, medium")
+    return presets[lambda_preset]
+
+
 def _json_default(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         return value.tolist()
@@ -453,6 +492,21 @@ def frontier(
     prices_csv: str = typer.Option(..., help="Input prices CSV."),
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
     n_points: int = typer.Option(20, help="Number of frontier points."),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
+    gross_limit: float | None = typer.Option(
+        None,
+        help="Optional gross exposure limit for long-short mode.",
+    ),
+    return_min: float | None = typer.Option(
+        None,
+        help="Optional minimum target return for frontier grid.",
+    ),
+    return_max: float | None = typer.Option(
+        None,
+        help="Optional maximum target return for frontier grid.",
+    ),
+    parallel: bool = typer.Option(True, "--parallel/--no-parallel"),
+    n_jobs: int = typer.Option(-1, help="Parallel workers for frontier solve."),
     output_csv: str | None = typer.Option(None, help="Optional output CSV path."),
     plot_path: str | None = typer.Option(None, help="Optional plot output path (.html/.png/.svg)."),
     config: str | None = typer.Option(None, help="Path to YAML config."),
@@ -464,13 +518,24 @@ def frontier(
     cfg = _load_config(config)
     prices = align_and_clean_prices(_load_prices_csv(prices_csv), cfg.data.missing_data_policy)
     rets = compute_returns(prices, method=cfg.metrics.return_method)
+    return_range = (
+        (return_min, return_max)
+        if return_min is not None and return_max is not None
+        else None
+    )
+    effective_gross = gross_limit
+    if effective_gross is None and not no_short:
+        effective_gross = cfg.optimization.gross_exposure_limit
 
     frontier_df = compute_cdar_efficient_frontier(
         returns=rets,
         alpha=alpha,
-        no_short=cfg.optimization.no_short,
+        no_short=no_short,
         n_points=n_points,
-        parallel=True,
+        return_range=return_range,
+        gross_exposure_limit=effective_gross,
+        parallel=parallel,
+        n_jobs=n_jobs,
     )
 
     if output_csv:
@@ -492,10 +557,18 @@ def frontier(
 def surface(
     prices_csv: str = typer.Option(..., help="Input prices CSV."),
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
-    lambda_grid_json: str = typer.Option(
-        ...,
-        help="JSON list of [lambda_cdar, lambda_var, lambda_return].",
+    lambda_grid_json: str | None = typer.Option(
+        None,
+        help="Optional JSON list of [lambda_cdar, lambda_var, lambda_return].",
     ),
+    lambda_preset: str = typer.Option("small", help="small|medium preset grid."),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
+    gross_limit: float | None = typer.Option(
+        None,
+        help="Optional gross exposure limit for long-short mode.",
+    ),
+    parallel: bool = typer.Option(True, "--parallel/--no-parallel"),
+    n_jobs: int = typer.Option(-1, help="Parallel workers for surface solve."),
     output_csv: str | None = typer.Option(None, help="Optional output CSV path."),
     plot_path: str | None = typer.Option(None, help="Optional plot output path (.html/.png/.svg)."),
     mode: str = typer.Option("3d", help="3d|2d-projections"),
@@ -508,23 +581,19 @@ def surface(
     cfg = _load_config(config)
     prices = align_and_clean_prices(_load_prices_csv(prices_csv), cfg.data.missing_data_policy)
     rets = compute_returns(prices, method=cfg.metrics.return_method)
-
-    grid = json.loads(lambda_grid_json)
-    lambda_grid: list[tuple[float, float, float]] = []
-    for row in grid:
-        if not isinstance(row, list | tuple) or len(row) != 3:
-            raise typer.BadParameter(
-                "Each lambda grid entry must be a 3-item list: "
-                "[lambda_cdar, lambda_var, lambda_return]."
-            )
-        lambda_grid.append((float(row[0]), float(row[1]), float(row[2])))
+    lambda_grid = _resolve_lambda_grid(lambda_grid_json, lambda_preset)
+    effective_gross = gross_limit
+    if effective_gross is None and not no_short:
+        effective_gross = cfg.optimization.gross_exposure_limit
 
     surface_df = compute_mean_var_cdar_surface(
         returns=rets,
         alpha=alpha,
         lambda_grid=lambda_grid,
-        no_short=cfg.optimization.no_short,
-        gross_exposure_limit=cfg.optimization.gross_exposure_limit,
+        no_short=no_short,
+        gross_exposure_limit=effective_gross,
+        parallel=parallel,
+        n_jobs=n_jobs,
     )
 
     if output_csv:
@@ -547,6 +616,7 @@ def run_pipeline(
     tickers: str = typer.Option("SPY,AGG,GLD,QQQ", help="Comma-separated list of symbols."),
     years: int = typer.Option(5, help="Lookback years for default date range."),
     alpha: float = typer.Option(0.95, help="CDaR alpha."),
+    no_short: bool = typer.Option(True, "--no-short/--allow-short"),
     output_root: str = typer.Option("runs", help="Base output directory."),
     config: str | None = typer.Option(None, help="Path to YAML config."),
     verbose: bool = typer.Option(False, "--verbose"),
@@ -587,7 +657,7 @@ def run_pipeline(
     opt = optimize_portfolio_cdar(
         returns=rets,
         alpha=alpha,
-        no_short=cfg.optimization.no_short,
+        no_short=no_short,
         gross_exposure_limit=cfg.optimization.gross_exposure_limit,
         weight_bounds=None,
         annualization_factor=cfg.annualization_factor,
@@ -598,14 +668,14 @@ def run_pipeline(
         rets,
         alpha=alpha,
         n_points=20,
-        no_short=cfg.optimization.no_short,
+        no_short=no_short,
     )
-    lambda_grid = [(1.0, 0.1, 0.1), (1.0, 0.5, 0.5), (1.0, 1.0, 1.0), (0.5, 1.0, 1.0)]
+    lambda_grid = _resolve_lambda_grid(None, "small")
     surface_df = compute_mean_var_cdar_surface(
         rets,
         alpha=alpha,
         lambda_grid=lambda_grid,
-        no_short=cfg.optimization.no_short,
+        no_short=no_short,
         gross_exposure_limit=cfg.optimization.gross_exposure_limit,
     )
 
@@ -616,6 +686,19 @@ def run_pipeline(
     surface_df.to_csv(results_dir / "surface.csv", index=False)
     (results_dir / "optimization.json").write_text(
         json.dumps(opt, indent=2, default=_json_default),
+        encoding="utf-8",
+    )
+    summary = {
+        "run_dir": str(run_dir),
+        "alpha": alpha,
+        "no_short": no_short,
+        "n_assets": int(rets.shape[1]),
+        "n_periods": int(rets.shape[0]),
+        "opt_status": opt.get("status"),
+        "opt_cdar": opt.get("cdar"),
+    }
+    (results_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2, default=_json_default),
         encoding="utf-8",
     )
 

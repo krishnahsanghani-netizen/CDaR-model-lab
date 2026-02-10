@@ -122,3 +122,67 @@ def test_backtest_command_with_benchmark_and_rebalance(tmp_path: Path):
     assert "metrics" in result.stdout
     assert "benchmark_metrics" in result.stdout
     assert out_path.exists()
+
+
+def test_frontier_command_with_advanced_flags(tmp_path: Path):
+    prices = pd.DataFrame(
+        {
+            "A": [100, 101, 99, 102, 103, 104],
+            "B": [50, 50.5, 50.2, 51, 51.2, 51.6],
+        },
+        index=pd.date_range("2024-01-01", periods=6, freq="D"),
+    )
+    prices_path = tmp_path / "prices.csv"
+    frontier_out = tmp_path / "frontier.csv"
+    prices.to_csv(prices_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "frontier",
+            "--prices-csv",
+            str(prices_path),
+            "--n-points",
+            "5",
+            "--allow-short",
+            "--gross-limit",
+            "2.0",
+            "--no-parallel",
+            "--output-csv",
+            str(frontier_out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert frontier_out.exists()
+
+
+def test_surface_command_with_preset(tmp_path: Path):
+    prices = pd.DataFrame(
+        {
+            "A": [100, 101, 99, 102, 103, 104],
+            "B": [50, 50.5, 50.2, 51, 51.2, 51.6],
+            "C": [80, 81, 80.5, 82, 82.2, 83],
+        },
+        index=pd.date_range("2024-01-01", periods=6, freq="D"),
+    )
+    prices_path = tmp_path / "prices.csv"
+    surface_out = tmp_path / "surface.csv"
+    prices.to_csv(prices_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "surface",
+            "--prices-csv",
+            str(prices_path),
+            "--lambda-preset",
+            "small",
+            "--no-parallel",
+            "--output-csv",
+            str(surface_out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert surface_out.exists()

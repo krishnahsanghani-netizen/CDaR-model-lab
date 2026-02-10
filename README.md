@@ -54,6 +54,8 @@ enhanced-cdar fetch-data --tickers SPY,AGG,GLD,QQQ --start 2021-01-01 --end 2026
 enhanced-cdar analyze-portfolio --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --format json
 enhanced-cdar backtest --prices-csv data/prices.csv --weights 0.25,0.25,0.25,0.25 --rebalance-calendar M
 enhanced-cdar optimize-cdar --prices-csv data/prices.csv --alpha 0.95 --no-short
+enhanced-cdar frontier --prices-csv data/prices.csv --n-points 20 --allow-short --gross-limit 2.0
+enhanced-cdar surface --prices-csv data/prices.csv --lambda-preset medium --no-parallel
 enhanced-cdar run-pipeline
 ```
 
