@@ -71,6 +71,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - frontier status/message behavior under extreme target-return ranges,
   - scenario validation edge cases,
   - strict missing-data preprocessing policy behavior.
+- Added hardening tests for rebalance schedule behavior (`M` boundaries and every-N rules).
+- Added regime validation tests for non-datetime index rejection and minimum-period filtering.
+- Removed `type: ignore` in regime CLI by explicit `RegimeFrequency` narrowing/cast.
+- Updated README quality-gate section to reflect current CI checks.
 
 ### Changed
 - Corrected module naming to `data/preprocess.py` in scaffold.

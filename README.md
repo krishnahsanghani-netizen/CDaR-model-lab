@@ -80,9 +80,10 @@ python examples/example_basic_pipeline.py
 - Data cache defaults to `./cache` and is reused until `--refresh` is passed.
 
 ## Development Quality Gates
-- Lint: `ruff`, `black`, `isort`
+- CI lint gate: `ruff`
 - Type checks: `mypy`
 - Tests: `pytest --cov`
+- Build check: `python -m build`
 - CI matrix: Python 3.10 and 3.11
 
 ## License

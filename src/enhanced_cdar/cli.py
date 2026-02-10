@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,11 @@ from enhanced_cdar.portfolio.optimization import (
     compute_mean_var_cdar_surface,
     optimize_portfolio_cdar,
 )
-from enhanced_cdar.portfolio.regime import compare_regime_cdar, compute_regime_metrics
+from enhanced_cdar.portfolio.regime import (
+    RegimeFrequency,
+    compare_regime_cdar,
+    compute_regime_metrics,
+)
 from enhanced_cdar.portfolio.scenario import evaluate_portfolio_scenarios, preset_scenarios
 from enhanced_cdar.portfolio.weights import load_asset_bounds_csv
 from enhanced_cdar.viz.frontier import plot_cdar_efficient_frontier
@@ -820,11 +824,12 @@ def regime_analysis(
     if regime_frequency not in {"Y", "Q", "M"}:
         raise typer.BadParameter("regime_frequency must be one of Y, Q, M.")
 
+    regime_freq = cast(RegimeFrequency, regime_frequency)
     regime_df = compute_regime_metrics(
         returns=rets,
         weights=w,
         alpha=alpha,
-        regime_frequency=regime_frequency,  # type: ignore[arg-type]
+        regime_frequency=regime_freq,
         annualization_factor=cfg.annualization_factor,
         risk_free_rate_annual=cfg.metrics.risk_free_rate_annual,
         min_periods=min_periods,
