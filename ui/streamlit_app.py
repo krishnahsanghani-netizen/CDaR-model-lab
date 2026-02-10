@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import base64
+import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +13,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from enhanced_cdar.config import AppConfig
 from enhanced_cdar.data.loaders import load_from_yfinance
@@ -26,16 +30,33 @@ from enhanced_cdar.portfolio.optimization import (
 )
 from enhanced_cdar.viz.animation import (
     animate_frontier_over_time,
+    animate_reactive_cdar_model,
     animate_surface_over_time,
     animate_underwater,
     generate_frontier_snapshots,
     generate_surface_snapshots,
 )
 from enhanced_cdar.viz.frontier import make_cdar_frontier_figure
-from enhanced_cdar.viz.surfaces import make_mean_variance_cdar_surface_figure
+from enhanced_cdar.viz.surfaces import (
+    make_cdar_reactive_model_figure,
+    make_mean_variance_cdar_surface_figure,
+)
 from enhanced_cdar.viz.underwater import make_underwater_figure
-from ui.state import UIState
-from ui.utils import autodetect_csv_columns, load_example_prices, parse_uploaded_prices
+try:
+    from ui.state import UIState
+    from ui.utils import (
+        autodetect_csv_columns,
+        load_example_prices,
+        parse_uploaded_prices,
+    )
+except ModuleNotFoundError:
+    # Supports direct execution via: streamlit run ui/streamlit_app.py
+    from state import UIState  # type: ignore
+    from utils import (  # type: ignore
+        autodetect_csv_columns,
+        load_example_prices,
+        parse_uploaded_prices,
+    )
 
 STATE_KEY = "cdar_ui_state"
 
@@ -48,6 +69,53 @@ def get_state() -> UIState:
 
 def _theme_to_template(theme: str) -> str:
     return "plotly_dark" if theme == "Dark" else "plotly_white"
+
+
+def _gif_to_mp4_for_preview(path: Path) -> Path:
+    """Convert GIF to MP4 for playback when ffmpeg is available."""
+    if path.suffix.lower() != ".gif":
+        return path
+    if shutil.which("ffmpeg") is None:
+        return path
+
+    mp4_path = path.with_name(f"{path.stem}.preview.mp4")
+    if mp4_path.exists() and mp4_path.stat().st_mtime >= path.stat().st_mtime:
+        return mp4_path
+
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(path),
+                "-movflags",
+                "faststart",
+                "-pix_fmt",
+                "yuv420p",
+                str(mp4_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return mp4_path
+    except Exception:
+        return path
+
+
+def _render_looping_video(path: Path, height: int = 520) -> None:
+    """Render autoplaying, looping HTML5 video with pause controls."""
+    suffix = path.suffix.lower()
+    mime = "video/mp4" if suffix == ".mp4" else "video/webm"
+    payload = base64.b64encode(path.read_bytes()).decode("ascii")
+    html = f"""
+    <video controls autoplay loop muted playsinline style="width:100%; border-radius:10px;">
+      <source src="data:{mime};base64,{payload}" type="{mime}">
+      Your browser does not support embedded video playback.
+    </video>
+    """
+    components.html(html, height=height, scrolling=False)
 
 
 def _safe_fetch_prices(
@@ -71,7 +139,7 @@ def _safe_fetch_prices(
     except Exception as exc:
         st.error(
             "Could not fetch data from yfinance. "
-            "If you are offline, upload a CSV instead. "
+            "If network access is unavailable, upload a CSV instead. "
             f"Details: {exc}"
         )
         return None
@@ -85,6 +153,7 @@ def _choose_weights(
     gross_limit: float,
     frontier_target_return: float,
     frontier_percentile: int,
+    fast_mode: bool,
 ) -> tuple[np.ndarray, pd.DataFrame | None]:
     n_assets = returns_df.shape[1]
     if mode == "Equal-weight":
@@ -104,9 +173,9 @@ def _choose_weights(
         returns=returns_df,
         alpha=alpha,
         no_short=no_short,
-        n_points=30,
+        n_points=12 if fast_mode else 30,
         gross_exposure_limit=None if no_short else gross_limit,
-        parallel=True,
+        parallel=not fast_mode,
     )
     feasible = frontier_df.dropna(subset=["achieved_return", "cdar"])
     if feasible.empty:
@@ -136,11 +205,11 @@ def _load_or_fetch_benchmark(
 
     st.warning(
         f"Benchmark '{benchmark_ticker}' is not in uploaded data. "
-        "Trying yfinance fetch."
+        "Attempting to fetch benchmark prices from yfinance."
     )
     fetched = _safe_fetch_prices(benchmark_ticker, start, end, cfg.data.frequency, cfg)
     if fetched is None or fetched.empty:
-        st.warning("Benchmark fetch failed. Benchmark overlays/metrics disabled.")
+        st.warning("Benchmark fetch failed. Benchmark overlays and metrics are disabled.")
         return None
     return fetched.iloc[:, 0]
 
@@ -159,6 +228,8 @@ def _run_analysis(
     rebalance_choice: str,
     rebalance_n: int,
     show_surface: bool,
+    compute_frontier: bool,
+    fast_mode: bool,
     frontier_target_return: float,
     frontier_percentile: int,
 ) -> None:
@@ -175,6 +246,7 @@ def _run_analysis(
         gross_limit,
         frontier_target_return,
         frontier_percentile,
+        fast_mode,
     )
 
     start = prices_df.index.min().date().isoformat()
@@ -215,14 +287,14 @@ def _run_analysis(
     if show_rolling_cdar:
         rolling = compute_rolling_cdar(backtest.drawdown, alpha=alpha, window=rolling_window)
 
-    if frontier_df is None:
+    if frontier_df is None and compute_frontier:
         frontier_df = compute_cdar_efficient_frontier(
             returns=returns_df,
             alpha=alpha,
             no_short=no_short,
-            n_points=30,
+            n_points=12 if fast_mode else 30,
             gross_exposure_limit=None if no_short else gross_limit,
-            parallel=True,
+            parallel=not fast_mode,
         )
 
     surface_df = None
@@ -242,7 +314,7 @@ def _run_analysis(
             lambda_grid=lambda_grid,
             no_short=no_short,
             gross_exposure_limit=None if no_short else gross_limit,
-            parallel=True,
+            parallel=not fast_mode,
         )
 
     state.returns_df = returns_df
@@ -262,6 +334,8 @@ def _run_analysis(
         "mode": mode,
         "alpha": alpha,
         "no_short": no_short,
+        "data_start": str(returns_df.index.min().date()),
+        "data_end": str(returns_df.index.max().date()),
     }
     if benchmark_values is not None:
         state.benchmark_prices = benchmark_values
@@ -272,6 +346,14 @@ def _render_sidebar(state: UIState) -> dict[str, Any]:
     st.sidebar.title("CDaR Lab")
 
     cfg = AppConfig()
+    fast_mode = st.sidebar.toggle(
+        "Fast mode",
+        value=True,
+        help=(
+            "Prioritizes speed by reducing expensive optimization and animation settings. "
+            "Recommended for long date ranges."
+        ),
+    )
 
     st.sidebar.subheader("Data Source")
     source = st.sidebar.radio(
@@ -370,32 +452,53 @@ def _render_sidebar(state: UIState) -> dict[str, Any]:
 
     st.sidebar.subheader("Visualization")
     show_benchmark = st.sidebar.checkbox("Show benchmark", value=True)
-    show_rolling = st.sidebar.checkbox("Show rolling CDaR", value=True)
-    show_surface = st.sidebar.checkbox("Show mean–variance–CDaR surface", value=True)
+    show_rolling = st.sidebar.checkbox("Show rolling CDaR", value=not fast_mode)
+    show_surface = st.sidebar.checkbox(
+        "Show mean–variance–CDaR surface",
+        value=not fast_mode,
+    )
+    compute_frontier = st.sidebar.checkbox("Precompute frontier", value=not fast_mode)
     theme = st.sidebar.selectbox("Theme", options=["Light", "Dark"], index=0)
 
     st.sidebar.subheader("Animation / Export")
     gen_underwater = st.sidebar.checkbox("Generate underwater animation", value=True)
-    gen_frontier = st.sidebar.checkbox("Generate frontier animation", value=False)
-    gen_surface = st.sidebar.checkbox("Generate surface animation", value=False)
-    fps = st.sidebar.number_input("Animation FPS", min_value=2, value=12, max_value=60)
-    max_frames = st.sidebar.number_input("Max frames", min_value=20, value=300, max_value=1000)
+    gen_frontier = st.sidebar.checkbox("Generate frontier animation", value=not fast_mode)
+    gen_surface = st.sidebar.checkbox("Generate surface animation", value=not fast_mode)
+    gen_reactive_model = st.sidebar.checkbox("Generate reactive 3D model animation", value=True)
+    fps = st.sidebar.number_input(
+        "Animation FPS",
+        min_value=2,
+        value=8 if fast_mode else 12,
+        max_value=60,
+    )
+    max_frames = st.sidebar.number_input(
+        "Max frames",
+        min_value=20,
+        value=120 if fast_mode else 300,
+        max_value=1000,
+    )
     snapshot_lookback = st.sidebar.number_input(
         "Snapshot lookback (periods)",
         min_value=50,
-        value=252,
+        value=126 if fast_mode else 252,
         max_value=2000,
     )
     snapshot_step_mode_ui = st.sidebar.selectbox(
         "Snapshot step",
         options=["monthly", "quarterly", "custom"],
-        index=0,
+        index=1 if fast_mode else 0,
     )
     snapshot_custom_step = st.sidebar.number_input(
         "Custom snapshot step (periods)",
         min_value=1,
-        value=21,
+        value=63 if fast_mode else 21,
         max_value=500,
+    )
+    projection_years = st.sidebar.number_input(
+        "Projection horizon (years)",
+        min_value=1,
+        max_value=30,
+        value=5,
     )
 
     if st.sidebar.button("Run analysis"):
@@ -414,6 +517,8 @@ def _render_sidebar(state: UIState) -> dict[str, Any]:
                 rebalance_choice=rebalance_choice,
                 rebalance_n=int(rebalance_n),
                 show_surface=show_surface,
+                compute_frontier=compute_frontier,
+                fast_mode=fast_mode,
                 frontier_target_return=frontier_target_return,
                 frontier_percentile=frontier_percentile,
             )
@@ -433,16 +538,16 @@ def _render_sidebar(state: UIState) -> dict[str, Any]:
             generate_underwater=gen_underwater,
             generate_frontier=gen_frontier,
             generate_surface=gen_surface,
+            generate_reactive_model=gen_reactive_model,
+            fast_mode=fast_mode,
         )
-
-    if st.sidebar.button("Download latest report"):
-        st.sidebar.info("Report export placeholder. Will be added in a later phase.")
 
     return {
         "show_benchmark": show_benchmark,
         "show_rolling": show_rolling,
         "show_surface": show_surface,
         "theme": theme,
+        "projection_years": int(projection_years),
     }
 
 
@@ -457,6 +562,8 @@ def _generate_animations(
     generate_underwater: bool,
     generate_frontier: bool,
     generate_surface: bool,
+    generate_reactive_model: bool,
+    fast_mode: bool,
 ) -> None:
     if state.returns_df is None or state.equity_curve is None or state.drawdown_series is None:
         st.sidebar.error("Run analysis first before generating animations.")
@@ -468,7 +575,15 @@ def _generate_animations(
 
     files: list[dict[str, Any]] = []
     progress = st.sidebar.progress(0.0)
-    tasks = sum(int(x) for x in [generate_underwater, generate_frontier, generate_surface])
+    tasks = sum(
+        int(x)
+        for x in [
+            generate_underwater,
+            generate_frontier,
+            generate_surface,
+            generate_reactive_model,
+        ]
+    )
     done = 0
 
     if generate_underwater:
@@ -526,6 +641,21 @@ def _generate_animations(
         done += 1
         progress.progress(done / max(tasks, 1))
 
+    if generate_reactive_model:
+        ret_series = None
+        if state.returns_df is not None and state.weights is not None:
+            ret_series = (state.returns_df * state.weights).sum(axis=1)
+        path = animate_reactive_cdar_model(
+            drawdown=state.drawdown_series,
+            returns=ret_series,
+            fps=max(6, min(12 if fast_mode else 14, fps)),
+            save_path=str(videos_dir / "reactive_cdar_model.mp4"),
+            max_frames=max(180 if fast_mode else 300, max_frames),
+        )
+        files.append({"type": "reactive_model", "path": path})
+        done += 1
+        progress.progress(done / max(tasks, 1))
+
     manifest = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "files": files,
@@ -542,7 +672,7 @@ def _generate_animations(
     st.sidebar.success(f"Animations generated in: {videos_dir}")
 
 
-def _render_overview_tab(state: UIState) -> None:
+def _render_overview_tab(state: UIState, projection_years: int = 5) -> None:
     st.subheader("Overview")
     metrics = state.analysis_results.get("metrics", {}) if state.analysis_results else {}
 
@@ -555,9 +685,26 @@ def _render_overview_tab(state: UIState) -> None:
     cols2[0].metric("Max Drawdown", _fmt_pct(metrics.get("max_drawdown")))
     cols2[1].metric("Calmar", _fmt_num(metrics.get("calmar")))
     cols2[2].metric("Sharpe", _fmt_num(metrics.get("sharpe")))
+    expected_return = metrics.get("expected_return")
+    projected_value = None
+    if expected_return is not None and np.isfinite(float(expected_return)):
+        projected_value = (1.0 + float(expected_return)) ** projection_years
+    cols3 = st.columns(2)
+    cols3[0].metric(
+        f"Projected Value ({projection_years}Y, start=1.00)",
+        _fmt_value(projected_value),
+    )
+    if state.analysis_results:
+        cols3[1].metric(
+            "Data Window",
+            (
+                f"{state.analysis_results.get('data_start', '--')} to "
+                f"{state.analysis_results.get('data_end', '--')}"
+            ),
+        )
 
     st.caption(
-        "CDaR focuses on the average size of your worst drawdowns, not just return volatility."
+        "CDaR measures the average size of the worst drawdowns, rather than day-to-day volatility."
     )
 
     if state.weights is not None and state.returns_df is not None:
@@ -630,6 +777,54 @@ def _render_surface_tab(state: UIState, show_surface: bool, theme: str) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _render_reactive_model_tab(state: UIState, theme: str) -> None:
+    st.subheader("Reactive 3D Model")
+    if state.drawdown_series is None:
+        st.info("Run analysis to populate the reactive 3D model.")
+        return
+
+    ret_series = None
+    if state.returns_df is not None and state.weights is not None:
+        ret_series = (state.returns_df * state.weights).sum(axis=1)
+
+    fig = make_cdar_reactive_model_figure(
+        drawdown=state.drawdown_series,
+        returns=ret_series,
+        theme=_theme_to_template(theme),
+        max_frames=260,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(
+        "Model deformation intensity increases as drawdowns become deeper and more volatile."
+    )
+
+    if state.run_dir is None:
+        return
+    manifest_path = Path(state.run_dir) / "videos" / "manifest.json"
+    if not manifest_path.exists():
+        return
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    reactive_entries = [
+        entry for entry in manifest.get("files", []) if entry.get("type") == "reactive_model"
+    ]
+    if not reactive_entries:
+        return
+
+    latest_path = Path(str(reactive_entries[-1].get("path", "")))
+    if not latest_path.exists():
+        return
+
+    st.markdown("### Reactive Model Video")
+    preview_path = _gif_to_mp4_for_preview(latest_path)
+    suffix = preview_path.suffix.lower()
+    if suffix == ".mp4":
+        _render_looping_video(preview_path, height=560)
+    elif suffix == ".gif":
+        st.image(latest_path.read_bytes(), caption=latest_path.name)
+        st.info("GIF fallback detected. Install ffmpeg to enable MP4 export.")
+
+
 def _render_animation_tab(state: UIState) -> None:
     st.subheader("Animations / Export")
     if state.run_dir is None:
@@ -645,6 +840,16 @@ def _render_animation_tab(state: UIState) -> None:
         for entry in manifest.get("files", []):
             file_path = Path(entry["path"])
             if file_path.exists():
+                st.markdown(f"### {entry['type'].replace('_', ' ').title()} Preview")
+                preview_path = _gif_to_mp4_for_preview(file_path)
+                suffix = preview_path.suffix.lower()
+                if suffix == ".mp4":
+                    _render_looping_video(preview_path, height=500)
+                elif suffix == ".gif":
+                    st.image(file_path.read_bytes(), caption=file_path.name)
+                    st.info("GIF fallback detected. Install ffmpeg to enable MP4 export.")
+                else:
+                    st.info(f"No inline preview for {suffix} files yet.")
                 st.download_button(
                     label=f"Download {entry['type']} ({file_path.suffix})",
                     data=file_path.read_bytes(),
@@ -665,6 +870,12 @@ def _fmt_num(value: Any) -> str:
     return f"{float(value):.3f}"
 
 
+def _fmt_value(value: Any) -> str:
+    if value is None or (isinstance(value, float) and not np.isfinite(value)):
+        return "--"
+    return f"{float(value):.2f}x"
+
+
 def main() -> None:
     st.set_page_config(page_title="CDaR Lab", layout="wide")
     st.title("CDaR Lab")
@@ -673,12 +884,21 @@ def main() -> None:
     state = get_state()
     opts = _render_sidebar(state)
 
-    tab_overview, tab_underwater, tab_frontier, tab_surface, tab_animation = st.tabs(
-        ["Overview", "Underwater", "Frontier", "3D Surface", "Animations / Export"]
+    tab_overview, tab_underwater, tab_frontier, tab_surface, tab_reactive, tab_animation = (
+        st.tabs(
+            [
+                "Overview",
+                "Underwater",
+                "Frontier",
+                "3D Surface",
+                "Reactive 3D Model",
+                "Animations / Export",
+            ]
+        )
     )
 
     with tab_overview:
-        _render_overview_tab(state)
+        _render_overview_tab(state, projection_years=int(opts["projection_years"]))
     with tab_underwater:
         _render_underwater_tab(
             state,
@@ -694,6 +914,8 @@ def main() -> None:
             show_surface=bool(opts["show_surface"]),
             theme=str(opts["theme"]),
         )
+    with tab_reactive:
+        _render_reactive_model_tab(state, theme=str(opts["theme"]))
     with tab_animation:
         _render_animation_tab(state)
 

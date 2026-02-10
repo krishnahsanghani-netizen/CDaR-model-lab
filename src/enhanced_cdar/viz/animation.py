@@ -21,7 +21,6 @@ LOGGER = logging.getLogger(__name__)
 StepMode = Literal["monthly", "quarterly", "custom"]
 
 
-
 def select_frame_indices(n_points: int, max_frames: int = 300) -> np.ndarray:
     """Return monotonic frame indices capped at max_frames."""
     if n_points <= 0:
@@ -29,7 +28,6 @@ def select_frame_indices(n_points: int, max_frames: int = 300) -> np.ndarray:
     frame_count = min(n_points, max_frames)
     idx = np.linspace(0, n_points - 1, frame_count).astype(int)
     return np.unique(idx)
-
 
 
 def animate_underwater(
@@ -69,7 +67,10 @@ def animate_underwater(
         i = idx[frame_idx]
         line_val.set_data(x[: i + 1], values.iloc[: i + 1])
         if line_bench is not None and benchmark_values is not None:
-            line_bench.set_data(benchmark_values.index[: i + 1], benchmark_values.iloc[: i + 1])
+            line_bench.set_data(
+                benchmark_values.index[: i + 1],
+                benchmark_values.iloc[: i + 1],
+            )
         line_dd.set_data(drawdown.index[: i + 1], drawdown.iloc[: i + 1])
 
         ax1.relim()
@@ -82,7 +83,6 @@ def animate_underwater(
     out = _save_animation_with_fallback(anim, save_path, fps=fps, dpi=dpi)
     plt.close(fig)
     return out
-
 
 
 def animate_frontier_over_time(
@@ -114,7 +114,6 @@ def animate_frontier_over_time(
     out = _save_animation_with_fallback(anim, save_path, fps=fps, dpi=dpi)
     plt.close(fig)
     return out
-
 
 
 def animate_surface_over_time(
@@ -156,6 +155,94 @@ def animate_surface_over_time(
     return out
 
 
+def animate_reactive_cdar_model(
+    drawdown: pd.Series,
+    returns: pd.Series | None = None,
+    fps: int = 10,
+    dpi: int = 180,
+    save_path: str = "reactive_cdar_model.mp4",
+    max_frames: int = 360,
+) -> str:
+    """Render a cinematic deforming 3D model driven by drawdown dynamics."""
+    if drawdown.empty:
+        raise ValueError("drawdown series is empty.")
+
+    idx = select_frame_indices(len(drawdown), max_frames=max_frames)
+    if idx.size == 0:
+        raise ValueError("No frames to animate.")
+    idx = np.repeat(idx, 2)
+
+    dd_mag = (-drawdown.iloc[idx]).clip(lower=0.0).to_numpy(dtype=float)
+    if dd_mag.max() > 0:
+        dd_norm = dd_mag / dd_mag.max()
+    else:
+        dd_norm = np.zeros_like(dd_mag)
+
+    vol_norm = np.zeros_like(dd_norm)
+    if returns is not None and not returns.empty:
+        aligned = returns.reindex(drawdown.index).fillna(0.0)
+        rolling = aligned.rolling(21).std().iloc[idx].fillna(0.0).to_numpy(dtype=float)
+        if rolling.max() > 0:
+            vol_norm = rolling / rolling.max()
+
+    intensity = np.clip(0.15 + 0.75 * dd_norm + 0.25 * vol_norm, 0.05, 1.25)
+    phase = np.linspace(0.0, 2.0 * np.pi, len(idx), endpoint=False)
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection="3d")
+    fig.patch.set_facecolor("#08090f")
+    ax.set_facecolor("#08090f")
+
+    u = np.linspace(0.0, 2.0 * np.pi, 96)
+    v = np.linspace(0.0, 1.0, 96)
+    uu, vv = np.meshgrid(u, v)
+
+    def _field(phase_val: float, amp: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        radial = 1.0 + 0.22 * amp * np.sin(3.0 * uu + 2.5 * phase_val)
+        radial += 0.08 * np.cos(8.0 * vv - 1.7 * phase_val)
+        xx = vv * radial * np.cos(uu)
+        yy = vv * radial * np.sin(uu)
+        zz = 0.36 * amp * np.sin(8.0 * uu + 3.5 * vv + phase_val)
+        zz += 0.18 * (1.0 + amp) * np.cos(12.0 * vv - 2.0 * phase_val)
+        zz += -0.6 * vv**2
+        return xx, yy, zz
+
+    def _update(frame_idx: int):
+        ax.clear()
+        i = int(frame_idx)
+        xx, yy, zz = _field(float(phase[i]), float(intensity[i]))
+        ax.plot_surface(
+            xx,
+            yy,
+            zz,
+            cmap="turbo",
+            linewidth=0.08,
+            edgecolor=(0.03, 0.04, 0.05, 0.35),
+            antialiased=True,
+            rcount=96,
+            ccount=96,
+            alpha=0.97,
+            shade=True,
+        )
+        ax.set_axis_off()
+        ax.set_xlim(-1.2, 1.2)
+        ax.set_ylim(-1.2, 1.2)
+        ax.set_zlim(-1.4, 0.85)
+        ax.set_title(
+            f"Reactive CDaR Model | {drawdown.index[idx[i]].date()}",
+            color="#f4f4f8",
+            fontsize=13,
+            pad=16,
+        )
+        ax.view_init(elev=24 + 6 * np.sin(i / 18.0), azim=20 + 0.78 * i)
+        ax.set_box_aspect((1.0, 1.0, 0.58))
+        return []
+
+    anim = animation.FuncAnimation(fig, _update, frames=len(idx), blit=False)
+    out = _save_animation_with_fallback(anim, save_path, fps=fps, dpi=dpi)
+    plt.close(fig)
+    return out
+
 
 def generate_frontier_snapshots(
     returns: pd.DataFrame,
@@ -184,7 +271,6 @@ def generate_frontier_snapshots(
         label = str(block.index[-1].date())
         snapshots.append((label, frontier))
     return snapshots
-
 
 
 def generate_surface_snapshots(
@@ -217,7 +303,6 @@ def generate_surface_snapshots(
     return snapshots
 
 
-
 def _rolling_windows(
     index: pd.DatetimeIndex,
     lookback: int,
@@ -239,7 +324,6 @@ def _rolling_windows(
             windows.append(i)
             last_period = p
     return windows
-
 
 
 def _save_animation_with_fallback(

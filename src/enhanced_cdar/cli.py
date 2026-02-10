@@ -49,6 +49,7 @@ from enhanced_cdar.viz.underwater import plot_underwater
 from enhanced_cdar.viz.animation import (
     StepMode,
     animate_frontier_over_time,
+    animate_reactive_cdar_model,
     animate_surface_over_time,
     animate_underwater,
     generate_frontier_snapshots,
@@ -1040,6 +1041,62 @@ def animate_surface_cmd(
         },
     )
     typer.echo(f"Generated surface animation: {generated}")
+    typer.echo(f"Manifest: {manifest}")
+
+
+@app.command("animate-model")
+def animate_model_cmd(
+    run_dir: str | None = typer.Option(
+        None,
+        help="Existing run directory (preferred). If provided, data/prices.csv is used.",
+    ),
+    prices_csv: str | None = typer.Option(None, help="Input prices CSV."),
+    weights: str | None = typer.Option(
+        None,
+        help="Optional comma-separated weights. Defaults to equal-weight.",
+    ),
+    fps: int = typer.Option(16, help="Animation frames per second."),
+    dpi: int = typer.Option(140, help="Render DPI."),
+    max_frames: int = typer.Option(220, help="Maximum frames after downsampling."),
+    output_root: str = typer.Option("runs", help="Root directory for generated video runs."),
+    config: str | None = typer.Option(None, help="Path to YAML config."),
+) -> None:
+    """Generate cinematic reactive 3D risk model animation (MP4/GIF)."""
+    cfg = _load_config(config)
+    prices_path = _resolve_prices_for_animation(run_dir, prices_csv)
+    prices = align_and_clean_prices(
+        _load_prices_csv(str(prices_path)),
+        cfg.data.missing_data_policy,
+    )
+    returns = compute_returns(prices, method=cfg.metrics.return_method)
+
+    if weights:
+        weight_vec = _parse_weights(weights)
+    else:
+        weight_vec = np.full(returns.shape[1], 1.0 / returns.shape[1])
+    if len(weight_vec) != returns.shape[1]:
+        raise typer.BadParameter("Weights length does not match number of assets.")
+
+    portfolio_returns = compute_portfolio_returns(returns, weight_vec)
+    values = compute_cumulative_value(portfolio_returns)
+    drawdown = compute_drawdown_curve(values)
+
+    videos_dir = _new_videos_dir(output_root=output_root)
+    output_path = videos_dir / "reactive_cdar_model.mp4"
+    generated = animate_reactive_cdar_model(
+        drawdown=drawdown,
+        returns=portfolio_returns,
+        fps=fps,
+        dpi=dpi,
+        save_path=str(output_path),
+        max_frames=max_frames,
+    )
+    manifest = _write_video_manifest(
+        videos_dir,
+        files=[{"type": "reactive_model", "path": generated}],
+        extra={"fps": fps, "dpi": dpi, "max_frames": max_frames},
+    )
+    typer.echo(f"Generated reactive model animation: {generated}")
     typer.echo(f"Manifest: {manifest}")
 
 

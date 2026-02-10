@@ -1,0 +1,10 @@
+{
+  "name": "enhanced-cdar-model-lab",
+  "private": true,
+  "version": "0.2.0",
+  "description": "One-command local launcher for CDaR Lab Streamlit UI",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs"
+  }
+}
